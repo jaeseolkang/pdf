@@ -1,4 +1,4 @@
-# 2026-11-15 08:00 KST | 수정: 교보생명 로고·펭귄 이미지를 코드에 내장(base64)하고 요약 PDF 첫 쪽에 항상 표시 (이미지 원본 비율 유지, 크기만 조절)
+# 2026-11-15 08:20 KST | 수정: 원본 표를 표로 재구성(불필요한 행·열 제거), 구어체·불필요한 문구 삭제, 첫 쪽 이미지 크기 고정(축소 제외)
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -36,17 +36,18 @@
 쪽 종류별 처리
   전용 요약: 표지, 보험 가입 현황, 세대 분석, 상품별 분석, 신체부위별 보장현황, 연령별 분석
   범용 요약: 그 밖의 모든 쪽(Pride of KYOBO, 종합요약, 보장밸런스, 보장항목별 분석, 보장 제안,
-             전/후 비교 등). 원문 글자와 표를 문장으로 정리하며, 숫자는 원본 그대로 옮긴다.
+             전/후 비교 등). 원문 글자는 항목으로, 표는 표로 옮기며, 숫자는 원본 그대로 옮긴다.
   전용 양식으로 읽다가 실패한 쪽도 자동으로 범용 요약으로 처리한다. (실행 시 쪽별 처리 결과를 출력)
 
 첫 쪽 이미지
   교보생명 로고와 펭귄 이미지는 이 파일 안에 base64 로 들어 있어 별도 이미지 파일이 필요 없다.
   요약 PDF 첫 쪽에는 항상 들어가며(표지를 못 읽은 경우·--generic 포함), 크기는 LOGO_WIDTH_MM / PENGUIN_WIDTH_MM 으로 조절한다.
+  이미지는 내용이 많아도 축소되지 않고, 그 아래 내용만 한 쪽에 맞게 줄어든다.
 
 원칙
   1) 숫자는 원본 문자열을 그대로 사용한다. (계산·반올림·단위 변환 없음)
-  2) 표는 표로 옮기지 않고 문장/항목 텍스트로 풀어 쓴다.
-  3) 계약자·주피·종피 반복, 안내 문구 3줄, 빈 행 등 중요하지 않은 내용은 뺀다.
+  2) 원본의 표는 표로 옮긴다. 반복 열·안내 문구·빈 행·빈 열은 뺀다. 문장은 개조식 문어체로 쓰고 구어체는 쓰지 않는다.
+  3) 계약자·주피·종피 반복, 안내 문구 3줄 등 중요하지 않은 내용은 뺀다.
   4) 원본 N쪽 = 요약 N쪽 (쪽 수가 바뀌어도 항상 1:1). 내용이 넘치면 글자 크기를 줄여서라도 한 쪽에 맞춘다.
 
 설치
@@ -4848,40 +4849,45 @@ def is_boiler(s):
             or re.fullmatch(r"[-\s.·]+", s) is not None)
 
 
-def table_to_sentences(tb):
-    """표 한 개 → 행별 문장. 머리글 행(숫자가 나오기 전 행들)을 열 이름으로 쓰고, 비어 있거나 '-'인 칸은 생략."""
-    pairs = [([clean(c) for c in r], [c or "" for c in r]) for r in tb]
-    pairs = [(c, raw) for c, raw in pairs if any(c)]
-    rows, raws = [c for c, _ in pairs], [raw for _, raw in pairs]
-    if len(rows) < 2 or max(len(r) for r in rows) < 3:
-        return []
-    first = next((i for i, r in enumerate(rows) if any(_is_num(c) for c in r[1:])), None)
-    if first is None or first == 0:
-        return []
+def clean_grid(tb):
+    """표 한 개 → (머리글 행 수, 행 목록). 빈 행·빈 열·안내 문구 행을 제거한다. 쓸 수 없는 표는 None."""
+    rows = [[clean(c) for c in r] for r in tb]
+    rows = [r for r in rows if any(r) and not any(is_boiler(c) for c in r if c and c != "-")]
+    if len(rows) < 2:
+        return None
     width = max(len(r) for r in rows)
-    headers = []
-    for j in range(width):
-        h = ""
-        for r in reversed(raws[:first]):
-            if j < len(r) and r[j].strip():
-                h = re.sub(r"\s+", "", r[j])          # 머리글의 줄바꿈은 붙여 쓴다 (급성\n심근경색 → 급성심근경색)
-                break
-        headers.append(h)
-    out = []
-    for r in rows[first:]:
-        label_bits, parts = [], []
-        for j, v in enumerate(r):
-            if not v or v == "-":
-                continue
-            if j == 0 or (not headers[j] and not _is_num(v)):
-                label_bits.append(esc(v))
-            elif headers[j]:
-                parts.append(f"{esc(headers[j])} <b>{esc(v)}</b>")
-            else:
-                parts.append(f"<b>{esc(v)}</b>")
-        if parts:
-            out.append((f"<b>{' '.join(label_bits)}</b>: " if label_bits else "") + " · ".join(parts))
-    return out
+    rows = [r + [""] * (width - len(r)) for r in rows]
+    keep = [j for j in range(width) if any(r[j] for r in rows)]
+    rows = [[r[j] for j in keep] for r in rows]
+    if len(keep) < 2:
+        return None
+    first = next((i for i, r in enumerate(rows) if any(_is_num(c) for c in r[1:])), None)
+    head = 1 if first is None else min(max(first, 1), 3)
+    return head, rows
+
+
+def _dlen(s):
+    return sum(2 if ord(ch) > 0x2E80 else 1 for ch in s)
+
+
+def grid_table(head_n, rows):
+    """범용 쪽의 표를 그대로 표로 옮긴다. 열 폭은 글자 길이에 비례, 열이 많으면 글자 크기를 줄인다."""
+    n = len(rows[0])
+    size = 8 if n <= 6 else 7 if n <= 10 else 6.2 if n <= 14 else 5.5
+    weights = [min(max(max(_dlen(r[j]) for r in rows) + 2, 4), 30) for j in range(n)]
+    widths = [CW * w / sum(weights) for w in weights]
+    data = []
+    for i, r in enumerate(rows):
+        if i > head_n and r[0] and r[0] == rows[i - 1][0]:      # 앞 행과 같은 구분 값은 한 번만 표시
+            r = [""] + r[1:]
+        if i < head_n:
+            data.append([cell(esc(v), size, 1, True, colors.white) for v in r])
+        else:
+            data.append([cell(esc(v), size, 2 if _is_num(v) else 0, j == 0) for j, v in enumerate(r)])
+    t = Table(data, colWidths=widths, repeatRows=head_n)
+    t.setStyle(TableStyle(_BASE_STYLE + [("BACKGROUND", (0, 0), (-1, head_n - 1), NAVY),
+                                         ("ROWBACKGROUNDS", (0, head_n), (-1, -1), [colors.white, LIGHT])]))
+    return t
 
 
 def generic_items(page):
@@ -4898,47 +4904,42 @@ def generic_items(page):
         if is_boiler(s) or s in seen:
             continue
         seen.add(s)
-        s = " ".join(t for t in s.split() if t != "-")          # '없음' 표시(-)는 문장에서 생략
+        s = " ".join(t for t in s.split() if t != "-")          # '없음' 표시(-)는 생략
         if s:
             lines.append(s)
-    sents, tok = [], set()
+    grids, tok = [], set()
     for tb in page.extract_tables():
-        ss = table_to_sentences(tb)
-        if ss:
-            sents += ss
+        g = clean_grid(tb)
+        if g:
+            grids.append(g)
             for r in tb:
                 for c in r:
                     tok.update((c or "").split())
     rest = [l for l in lines if not tok or any(t not in tok for t in l.split())]
-    return rest, sents, unit
+    return rest, grids, unit
 
 
 def story_generic(e):
-    rest, sents, unit = generic_items(e["page"])
+    rest, grids, unit = generic_items(e["page"])
     st = page_header(e["title"], e["n"], f"단위: {unit}" if unit else "")
-    st.append(P("이 쪽은 전용 요약 양식이 없어 원문 내용을 문장으로 정리했습니다. "
-                "숫자는 원본 그대로이며, 그래프·도형은 글자로 읽히는 라벨·수치만 담았습니다.", "sub"))
-    if not rest and not sents:
-        st.append(Spacer(1, 6))
-        st.append(P("글자로 읽을 수 있는 내용이 없습니다 (이미지·그래프 쪽)."))
+    nt = _nos(e["title"])
+    rest = [l for l in rest if _nos(l) not in nt and nt not in _nos(l)]      # 쪽 제목과 같은 줄은 제외
+    if not rest and not grids:
+        st.append(P("텍스트 없음 (이미지·그래프)", "sub"))
         return st
-    if rest:
-        st.append(h2("내용"))
-        if len(rest) > 40:                                   # 줄이 너무 많으면 이어 붙여 촘촘하게
-            chunks = [" · ".join(esc(x) for x in rest[i:i + 6]) for i in range(0, len(rest), 6)]
-        else:
-            chunks = [esc(x) for x in rest]
-        for c in chunks:
-            st.append(Paragraph(c, S["gen"], bulletText="•"))
-    if sents:
-        st.append(h2("표 내용"))
-        for x in sents:
-            st.append(Paragraph(x, S["gen"], bulletText="•"))
+    if len(rest) > 40:                                       # 줄이 너무 많으면 이어 붙여 촘촘하게
+        rest = [" · ".join(esc(x) for x in rest[i:i + 6]) for i in range(0, len(rest), 6)]
+    else:
+        rest = [esc(x) for x in rest]
+    for c in rest:
+        st.append(Paragraph(c, S["gen"], bulletText="•"))
+    for head_n, rows in grids:
+        st += [Spacer(1, 5), grid_table(head_n, rows)]
     return st
 
 
 # ----------------------------------------------------------------------------
-# 4. 요약 문장 / 레이아웃 도우미
+# 4. 표·레이아웃 도우미
 # ----------------------------------------------------------------------------
 def col(text, color):
     return f'<font color="{color}">{text}</font>'
@@ -4986,23 +4987,61 @@ def kpi(items):
     return t
 
 
-def show(v):
-    return "없음(-)" if v == "-" else v
+_PS = {}
+LINE = colors.HexColor("#D1D5DB")
+_BASE_STYLE = [("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+               ("LEFTPADDING", (0, 0), (-1, -1), 3), ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+               ("TOPPADDING", (0, 0), (-1, -1), 2.2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2.2),
+               ("LINEBELOW", (0, 0), (-1, -1), 0.3, LINE), ("BOX", (0, 0), (-1, -1), 0.6, NAVY)]
 
 
-def group_lines(labels, vals, groups):
-    """그룹별로 '준비된 항목 금액' + '미준비(-) 항목'을 한 줄 문장으로."""
-    out, idx = [], 0
+def cell(text, size=8, align=0, bold=False, color=None):
+    """표 칸. align: 0 왼쪽, 1 가운데, 2 오른쪽"""
+    key = (size, align, bold, str(color), FONT)
+    if key not in _PS:
+        _PS[key] = ParagraphStyle(f"cell{len(_PS)}", fontName=FONT_B if bold else FONT, fontSize=size,
+                                  leading=size * 1.3, alignment=align, textColor=color or INK)
+    return Paragraph(text, _PS[key])
+
+
+def fit(widths_mm):
+    """열 폭(mm) 목록을 본문 폭에 맞춰 비례 조정한다."""
+    tot = sum(widths_mm)
+    return [CW * w / tot for w in widths_mm]
+
+
+def data_table(head, rows, widths, aligns=None, size=7.5, spans=None, head_size=None):
+    """머리글 + 본문 표. spans = [(시작행, 끝행)] 이면 첫 열을 그 행들에 걸쳐 병합(구분 열)."""
+    n = len(head)
+    aligns = aligns or [0] * n
+    data = [[cell(h, head_size or size, 1, True, colors.white) for h in head]]
+    for r in rows:
+        data.append([cell(v, size, aligns[j], bold=(bool(spans) and j == 0)) for j, v in enumerate(r)])
+    t = Table(data, colWidths=widths, repeatRows=1)
+    st = _BASE_STYLE + [("BACKGROUND", (0, 0), (-1, 0), NAVY)]
+    if spans:
+        for a, b in spans:
+            st.append(("BACKGROUND", (0, a + 1), (0, b + 1), LIGHT))
+            if b > a:
+                st.append(("SPAN", (0, a + 1), (0, b + 1)))
+            if a > 0:
+                st.append(("LINEABOVE", (0, a + 1), (-1, a + 1), 0.9, GRAY))
+    else:
+        st.append(("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]))
+    t.setStyle(TableStyle(st))
+    return t
+
+
+def grouped_rows(groups, getter, start=0):
+    """[(구분, [항목...])] → 표 행과 병합 범위. getter(항목순번, 항목명) → 값 칸 목록(이미 이스케이프된 문자열)"""
+    rows, spans, idx = [], [], 0
     for gname, glabels in groups:
-        gv = vals[idx: idx + len(glabels)]
-        idx += len(glabels)
-        present = [f"{esc(l)} <b>{v}</b>" for l, v in zip(glabels, gv) if v != "-"]
-        absent = [esc(l) for l, v in zip(glabels, gv) if v == "-"]
-        txt = f"<b>{gname}</b>  " + (" · ".join(present) if present else "전 항목 미준비(-)")
-        if present and absent:
-            txt += "  " + col("/ 미준비(-): " + " · ".join(absent), C_GRAY)
-        out.append(bullet(txt))
-    return out
+        a = start + len(rows)
+        for k, lab in enumerate(glabels):
+            rows.append([esc(gname) if k == 0 else "", esc(lab)] + list(getter(idx, lab)))
+            idx += 1
+        spans.append((a, start + len(rows) - 1))
+    return rows, spans
 
 
 def status_of(prep, short):
@@ -5013,72 +5052,94 @@ def status_of(prep, short):
     return "부족"
 
 
-def item_line(name, need, prep, short):
-    st = status_of(prep, short)
-    if st == "미보장":
-        tail = col(f"미보장 · 부족 {short}", C_NONE)
-        return f"<b>{esc(name)}</b> 필요 {need} · 준비 없음(-) · {tail}"
-    if st == "적정":
-        return f"<b>{esc(name)}</b> 필요 {need} · 준비 {prep} · {col('적정', C_OK)}"
-    return f"<b>{esc(name)}</b> 필요 {need} · 준비 {prep} · {col('부족 ' + short, C_LOW)}"
+STATUS_COLOR = {"적정": C_OK, "충분": C_OK, "부족": C_LOW, "미보장": C_NONE}
+
+
+def status_cell(s):
+    return f"<b>{col(s, STATUS_COLOR[s])}</b>"
+
+
+def num_size(w_mm):
+    return 7.5 if w_mm >= 14 else 6.5 if w_mm >= 10 else 5.8
 
 
 # ----------------------------------------------------------------------------
 # 5. 쪽별 스토리
 # ----------------------------------------------------------------------------
 def story_cover(cv, basis, entries):
-    st = brand_header() + [Spacer(1, 6 * mm), P(f"{esc(cv['name'])} 고객님을 위한", "cover_sub"), P("보장분석 요약 보고서", "cover_title"),
-          HRFlowable(width=70 * mm, thickness=3, color=NAVY, hAlign="LEFT"), Spacer(1, 6),
-          P("원본 보장분석 보고서를 쪽별로 1:1 요약했습니다. 금액은 원본 표기 그대로이며 단위는 원본과 같습니다.", "sub"),
-          Spacer(1, 12 * mm)]
-    for label, key, bold in (("Financial Planner", "fp", True), ("소속", "branch", False),
-                             ("H.P", "phone", False), ("Email", "email", False)):
-        if cv.get(key):
-            st.append(P((f"<b>{label}</b>" if bold else label) + f"  {esc(cv[key])}"))
-    st += [Spacer(1, 8 * mm), h2("구성 (요약 쪽 = 원본 쪽)")]
-    for e in entries:
-        if e["kind"] != "cover":
-            st.append(bullet(f"{e['n']}쪽  {esc(e['title'])}"))
-    st += [Spacer(1, 6 * mm),
-           P(f"분석 기준일 {basis or cv.get('print_date', '')}  ·  출력일 {cv.get('print_date', '')}", "sub")]
+    """로고·펭귄 이미지는 build_pdf 가 표지 위에 따로 넣는다 (축소 대상에서 제외)."""
+    st = [Spacer(1, 6 * mm), P(f"{esc(cv['name'])} 고객님을 위한", "cover_sub"), P("보장분석 요약 보고서", "cover_title"),
+          HRFlowable(width=70 * mm, thickness=3, color=NAVY, hAlign="LEFT"), Spacer(1, 8 * mm)]
+    info = [[cell(f"<b>{lab}</b>", 9, 0, color=GRAY), cell(esc(cv[key]), 9)]
+            for lab, key in (("Financial Planner", "fp"), ("소속", "branch"), ("H.P", "phone"), ("Email", "email"))
+            if cv.get(key)]
+    if info:
+        t = Table(info, colWidths=[42 * mm, 90 * mm], hAlign="LEFT")
+        t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 0.3, LINE), ("TOPPADDING", (0, 0), (-1, -1), 3),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 3), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+        st += [t, Spacer(1, 8 * mm)]
+    items = [e for e in entries if e["kind"] != "cover"]
+    half = (len(items) + 1) // 2
+    rows = []
+    for i in range(half):
+        l = items[i]
+        r = items[half + i] if half + i < len(items) else None
+        rows.append([str(l["n"]), esc(l["title"]), str(r["n"]) if r else "", esc(r["title"]) if r else ""])
+    st.append(data_table(["쪽", "구성", "쪽", "구성"], rows, fit([9, 79, 9, 79]), aligns=[1, 0, 1, 0], size=8))
+    st += [Spacer(1, 5 * mm), P(f"분석 기준일 {basis or cv.get('print_date', '')} · 출력일 {cv.get('print_date', '')}", "sub")]
     return st
 
 
 def story_enrollment(d, src, name):
     info, cs = d["info"], d["contracts"]
-    cv = {"name": name}
-    st = page_header("보험 가입 현황", src, f"{esc(cv['name'])}님 ({info['birth']}생) 현재 유지 중인 계약")
+    st = page_header("보험 가입 현황", src, f"{esc(name)} ({info['birth']}생)")
     st.append(kpi([("보험나이", f"{info['ins_age']}세"), ("상령일", info["age_date"]),
                    ("유지계약", f"{info['n_contracts']}건"), ("월보험료", f"{info['monthly']}원"),
                    ("기납입보험료", f"{info['paid_total']}원")]))
     st.append(Spacer(1, 6))
-    same = all(c["holder"] == c["insured"] == cv["name"] and c["coinsured"] == "-" for c in cs)
-    if same:
-        st.append(P(f"{len(cs)}건 모두 계약자·주피보험자가 {esc(cv['name'])}님 본인이며 종피보험자는 없습니다."))
-    st.append(h2("계약 목록"))
+    same = all(c["holder"] == c["insured"] == name and c["coinsured"] == "-" for c in cs)
+    has_last = any(c["last"] not in ("", "-") for c in cs)
+    head = ["번호", "구분", "보험사", "상품명", "계약일", "만기", "월보험료(원)", "납입횟수"]
+    wid = [7, 10, 19, 0, 19, 17, 18, 19]
+    if has_last:
+        head.append("최종월도")
+        wid.append(15)
+    head.append("기납입(원)")
+    wid.append(20)
+    if not same:
+        head.append("계약자 / 주피 / 종피")
+        wid.append(26)
+    wid[3] = max(178 - sum(wid), 24)
+    rows = []
     for c in cs:
-        origin = "당사" if c["origin"] == "당사" else f"타사({esc(c['origin'])})"
-        who = "" if same else f" 계약자 {esc(c['holder'])}, 주피 {esc(c['insured'])}, 종피 {esc(c['coinsured'])}."
-        last = "" if c["last"] in ("", "-") else f", 최종월도 {c['last']}"
-        st.append(bullet(
-            f"<b>{c['no']}. {esc(c['company'])} {esc(c['name'])}</b> ({origin})<br/>"
-            f"계약일 {c['date']} · 만기 {esc(c['expiry'])} · 월보험료 {c['premium']}원 · "
-            f"납입횟수 {c['count']}{last} · 기납입 {c['paid']}원.{who}"))
-    st.append(Spacer(1, 4))
-    st.append(P("납입횟수는 ‘납입/전체(잔여)’ 형식으로 원본 표기 그대로입니다.", "sub"))
+        r = [c["no"], esc(c["origin"]), esc(c["company"]), esc(c["name"]), c["date"], esc(c["expiry"]),
+             c["premium"], esc(c["count"])]
+        if has_last:
+            r.append("" if c["last"] == "-" else esc(c["last"]))
+        r.append(c["paid"])
+        if not same:
+            r.append(f"{esc(c['holder'])} / {esc(c['insured'])} / {esc(c['coinsured'])}")
+        rows.append(r)
+    aligns = [1, 1, 0, 0, 1, 1, 2, 1] + ([1] if has_last else []) + [2] + ([0] if not same else [])
+    st.append(data_table(head, rows, fit(wid), aligns=aligns, size=7.2))
+    if same:
+        st += [Spacer(1, 4), P(f"계약자·피보험자: {esc(name)} (전 계약 동일)", "sub")]
     return st
 
 
 def story_generation(d, src):
     cnt, members = d["counts"], d["members"]
-    st = page_header("세대 분석", src, "가족 구성원별 보장 준비 금액 (단위: 만원)")
+    st = page_header("세대 분석", src, "구성원별 준비 금액 · 단위: 만원")
     if cnt:
-        st.append(P(f"유지계약 <b>{cnt['total']}건</b> — 교보생명 {cnt['kyobo']}건 · 생명보험 {cnt['life']}건 · "
-                    f"손해보험 {cnt['nonlife']}건 · 공제/우체국 {cnt['mutual']}건"))
-    for m in members:
-        st.append(h2(f"{esc(m['name'])} ({m['age']}세)"))
-        st += group_lines(LABELS_A, m["a"], GROUPS_A)
-        st += group_lines(LABELS_B, m["b"], GROUPS_B)
+        st.append(data_table(["구분", "전체", "교보생명", "생명보험", "손해보험", "공제/우체국"],
+                             [["유지계약"] + [f"{cnt[k]}건" for k in ("total", "kyobo", "life", "nonlife", "mutual")]],
+                             fit([26, 30, 30, 30, 30, 30]), aligns=[1] * 6, size=8))
+        st.append(Spacer(1, 6))
+    ra, sa = grouped_rows(GROUPS_A, lambda i, l: [esc(m["a"][i]) for m in members])
+    rb, sb = grouped_rows(GROUPS_B, lambda i, l: [esc(m["b"][i]) for m in members], start=len(ra))
+    head = ["구분", "항목"] + [f"{esc(m['name'])}<br/>({m['age']}세)" for m in members]
+    wid = [22, 34] + [122 / len(members)] * len(members)
+    st.append(data_table(head, ra + rb, fit(wid), aligns=[0, 0] + [2] * len(members), size=7.5, spans=sa + sb))
     return st
 
 
@@ -5087,55 +5148,48 @@ def story_products(d, src, title, labels, groups):
     need, prep, short = d["need"], d["prep"], d["short"]
     stat = [status_of(prep[i], short[i]) for i in range(n)]
     cnt = {k: stat.count(k) for k in ("적정", "부족", "미보장")}
-    sub = "필요자금 대비 급부별 분석 · 단위: 만원"
-    st = page_header(title, src, sub)
+    st = page_header(title, src, "단위: 만원")
     if d["head"]:
         h = d["head"]
         st.append(kpi([("분석항목(전체)", f"{h['total']}개"), ("적정보장", f"{h['ok']}개", C_OK),
                        ("부족보장", f"{h['low']}개", C_LOW), ("미보장", f"{h['none']}개", C_NONE)]))
-        st.append(Spacer(1, 3))
-        st.append(P(f"이 쪽 {n}개 항목: 적정 {cnt['적정']}개 · 부족 {cnt['부족']}개 · 미보장 {cnt['미보장']}개", "sub"))
     else:
         st.append(kpi([("이 쪽 분석항목", f"{n}개"), ("적정보장", f"{cnt['적정']}개", C_OK),
                        ("부족보장", f"{cnt['부족']}개", C_LOW), ("미보장", f"{cnt['미보장']}개", C_NONE)]))
-    st.append(h2("필요 대비 준비 현황"))
-    idx = 0
-    for gname, glabels in groups:
-        lines = []
-        for lab in glabels:
-            lines.append(item_line(lab, need[idx], prep[idx], short[idx]))
-            idx += 1
-        st.append(bullet(f"<b>[{gname}]</b><br/>" + "<br/>".join(lines)))
-    st.append(h2("상품별 준비 내용"))
-    for p in d["products"]:
-        items = [f"{esc(l)} <b>{v}</b>" for l, v in zip(labels, p["vals"]) if v != "-"]
-        exp = p["expiry"] if p["expiry"] == "종신" else f"만기 {p['expiry']}"
-        head = f"<b>{esc(p['company'])} {esc(p['name'])}</b> (월 {p['premium']} · {esc(exp)})"
-        st.append(bullet(head + "<br/>" + (" · ".join(items) if items else "이 쪽 항목에 해당하는 보장 없음")))
-    if d["total"] == prep:
-        st.append(P("상품별 금액을 합하면 위 ‘준비’ 금액과 같습니다 (원본 ‘보장 합계’ 행).", "sub"))
+    st.append(Spacer(1, 6))
+    shown = [(k, p) for k, p in enumerate(d["products"], 1) if any(v != "-" for v in p["vals"])]
+    m = len(shown)
+    fixed = [16, 27, 14, 14, 14, 13]
+    pw = max(min((178 - sum(fixed)) / m, 15), 6) if m else 0
+    size = num_size(pw) if m else 7.5
+    head = ["구분", "항목", "필요", "준비", "부족", "상태"] + [str(k) for k, _ in shown]
+    rows, spans = grouped_rows(groups, lambda i, l: [esc(need[i]), esc(prep[i]), esc(short[i])])
+    for i, r in enumerate(rows):
+        r.insert(5, status_cell(stat[i]))
+        r.extend(esc(p["vals"][i]) for _, p in shown)
+    st.append(data_table(head, rows, fit(fixed + [pw] * m), aligns=[0, 0, 2, 2, 2, 1] + [2] * m, size=size,
+                         spans=spans))
+    if shown:
+        st.append(Spacer(1, 7))
+        prow = [[str(k), esc(p["company"]), esc(p["name"]), p["premium"],
+                 esc("종신" if p["expiry"] == "종신" else p["expiry"])] for k, p in shown]
+        st.append(data_table(["번호", "보험사", "상품명", "월보험료", "만기"], prow, fit([10, 30, 76, 28, 24]),
+                             aligns=[1, 0, 0, 2, 1], size=7.5))
     return st
 
 
 def story_body(d, src):
     body = d["body"]
-    st = page_header("신체부위별 보장현황", src, "원본 범례 색 기준 충분/부족/미보장 · 단위: 만원")
+    st = page_header("신체부위별 보장현황", src, "단위: 만원")
     cnt = {"충분": 0, "부족": 0, "미보장": 0}
-    for _, st_ in body.values():
-        cnt[st_] += 1
+    for _, s_ in body.values():
+        cnt[s_] += 1
     st.append(kpi([("충분", f"{cnt['충분']}개", C_OK), ("부족", f"{cnt['부족']}개", C_LOW),
                    ("미보장", f"{cnt['미보장']}개", C_NONE)]))
-    palette = {"충분": C_OK, "부족": C_LOW, "미보장": C_NONE}
-    for gname, labs in BODY_GROUPS:
-        parts = []
-        for lab in labs:
-            v, s_ = body[lab]
-            parts.append(f"{esc(lab)} <b>{v}</b> " + col(f"({s_})", palette[s_]))
-        st.append(h2(gname))
-        st.append(bullet(" · ".join(parts)))
-    st.append(Spacer(1, 4))
-    st.append(P(f"충분 {cnt['충분']}개 · 부족 {cnt['부족']}개 · 미보장 {cnt['미보장']}개 "
-                "(금액이 0인 항목은 미보장으로 표시되어 있습니다).", "sub"))
+    st.append(Spacer(1, 6))
+    rows, spans = grouped_rows(BODY_GROUPS, lambda i, l: [esc(body[l][0]), status_cell(body[l][1])])
+    st.append(data_table(["구분", "항목", "금액", "상태"], rows, fit([30, 62, 42, 30]), aligns=[0, 0, 2, 1], size=8.5,
+                         spans=spans))
     return st
 
 
@@ -5150,19 +5204,14 @@ def age_groups(rows):
 
 
 def story_ages(title, src, rows, labels, groups):
-    st = page_header(title, src, "조회 연령에 따라 보장 금액이 어떻게 바뀌는지 · 단위: 만원")
-    prev = None
-    for ages, vals in age_groups(rows):
-        st.append(h2(" · ".join(ages) + " 조회 시"))
-        if len(ages) > 1:
-            st.append(P(col(f"위 {len(ages)}개 시점의 보장 금액은 모두 같습니다.", C_GRAY), "sub"))
-        if prev is None:
-            st += group_lines(labels, vals, groups)
-        else:
-            ch = [f"<b>{esc(l)}</b> {show(a)} → {show(b)}" for l, a, b in zip(labels, prev, vals) if a != b]
-            st.append(bullet("직전 구간 대비 변동: " + (", ".join(ch) if ch else "없음")))
-            st.append(bullet("위에 적지 않은 항목은 직전 구간과 같습니다."))
-        prev = vals
+    st = page_header(title, src, "연령별 보장 금액 · 단위: 만원")
+    ag = age_groups(rows)
+    g = len(ag)
+    pw = max(min((178 - 52) / g, 22), 6)
+    head = ["구분", "항목"] + [esc(a[0]) if len(a) == 1 else f"{esc(a[0])}~<br/>{esc(a[-1])}" for a, _ in ag]
+    table_rows, spans = grouped_rows(groups, lambda i, l: [esc(v[i]) for _, v in ag])
+    st.append(data_table(head, table_rows, fit([20, 32] + [pw] * g), aligns=[0, 0] + [2] * g, size=num_size(pw),
+                         spans=spans))
     return st
 
 
@@ -5211,8 +5260,8 @@ def build_pdf(entries, ctx, out_path):
     ctx["entries"] = entries
     cv = ctx["cover"]
     stories = [make_story(e, ctx) for e in entries]
-    if entries and not (entries[0]["kind"] == "cover" and entries[0]["mode"] == "전용"):
-        stories[0] = brand_header() + stories[0]          # 표지를 못 읽었어도 첫 쪽에는 항상 로고·펭귄을 넣는다
+    brand = brand_header()                                # 첫 쪽에는 항상 로고·펭귄을 넣고, 이 부분은 축소하지 않는다
+    brand_h = natural_height(brand) if brand else 0
     for e, st in zip(entries, stories):
         h = natural_height(st)
         if h > FH * 1.5:
@@ -5222,12 +5271,16 @@ def build_pdf(entries, ctx, out_path):
                           author=cv.get("fp", ""), leftMargin=MARGIN_X, rightMargin=MARGIN_X)
     doc.total_pages = len(entries)
     doc.footer_left = (f"{name} 고객님 보장분석 요약 · {ctx['basis'] or cv.get('print_date', '')} 기준 · "
-                       "보험금 지급 근거가 아니며 약관·증권이 우선합니다")
+                       "보험금 지급 근거 아님, 약관·증권 우선")
     frame = Frame(MARGIN_X, FRAME_BOTTOM, CW, FH, leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
     doc.addPageTemplates([PageTemplate(id="main", frames=[frame], onPage=draw_footer)])
     story = []
     for i, st in enumerate(stories):
-        story.append(KeepInFrame(CW, FH, st, mode="shrink"))      # 넘치면 축소해서 한 쪽에 맞춤
+        if i == 0:
+            story.extend(brand)
+            story.append(KeepInFrame(CW, FH - brand_h - 2, st, mode="shrink"))    # 이미지 아래 내용만 축소
+        else:
+            story.append(KeepInFrame(CW, FH, st, mode="shrink"))                  # 넘치면 축소해서 한 쪽에 맞춤
         if i < len(stories) - 1:
             story.append(PageBreak())
     doc.build(story)
