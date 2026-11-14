@@ -1,4 +1,4 @@
-# 2026-11-15 08:20 KST | 수정: 원본 표를 표로 재구성(불필요한 행·열 제거), 구어체·불필요한 문구 삭제, 첫 쪽 이미지 크기 고정(축소 제외)
+# 2026-11-15 08:30 KST | 수정: 신체부위별 보장현황을 원본 그림 모양대로 복원, 범용 요약 쪽을 16:9 가로 쪽으로 변경
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -34,6 +34,7 @@
   원본 p.26 보장밸런스(그래프) 전/후 비교 → 요약 p.26
 
 쪽 종류별 처리
+  (범용 요약 쪽은 16:9 가로 쪽, 전용 요약 쪽은 A4 세로 쪽. 신체부위별 보장현황은 원본 그림 모양 그대로 복원)
   전용 요약: 표지, 보험 가입 현황, 세대 분석, 상품별 분석, 신체부위별 보장현황, 연령별 분석
   범용 요약: 그 밖의 모든 쪽(Pride of KYOBO, 종합요약, 보장밸런스, 보장항목별 분석, 보장 제안,
              전/후 비교 등). 원문 글자는 항목으로, 표는 표로 옮기며, 숫자는 원본 그대로 옮긴다.
@@ -94,8 +95,8 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import (BaseDocTemplate, Frame, HRFlowable, Image, KeepInFrame,
-                                PageBreak, PageTemplate, Paragraph, Spacer, Table,
+from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Image, KeepInFrame,
+                                NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
 # ----------------------------------------------------------------------------
@@ -4371,7 +4372,7 @@ def embedded_image(b64, width_mm, h_align):
     return img
 
 
-def brand_header():
+def brand_header(width=None):
     """첫 쪽 맨 위에 넣는 로고(왼쪽) + 펭귄 이미지(오른쪽). 실패해도 요약 PDF 만들기는 계속한다."""
     try:
         logo = embedded_image(LOGO_B64, LOGO_WIDTH_MM, "LEFT")
@@ -4379,7 +4380,7 @@ def brand_header():
     except Exception as ex:
         print(f"[주의] 내장 이미지를 불러오지 못했습니다: {ex}")
         return []
-    t = Table([[logo, peng]], colWidths=[CW - PENGUIN_WIDTH_MM * mm, PENGUIN_WIDTH_MM * mm])
+    t = Table([[logo, peng]], colWidths=[(width or CW) - PENGUIN_WIDTH_MM * mm, PENGUIN_WIDTH_MM * mm])
     t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                            ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                            ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
@@ -4435,6 +4436,15 @@ CW = PAGE_W - 2 * MARGIN_X                 # 본문 폭
 FRAME_BOTTOM = 18 * mm
 FRAME_TOP_MARGIN = 14 * mm
 FH = PAGE_H - FRAME_BOTTOM - FRAME_TOP_MARGIN - 2   # 본문 높이(여유 2pt)
+
+# 범용 요약 쪽: 16:9 가로 (가로 297mm × 세로 167.06mm)
+WIDE_W = 297 * mm
+WIDE_H = WIDE_W * 9 / 16
+W_MARGIN_X = 14 * mm
+WCW = WIDE_W - 2 * W_MARGIN_X
+W_BOTTOM = 16 * mm
+W_TOP = 9 * mm
+WFH = WIDE_H - W_BOTTOM - W_TOP - 2
 
 S = {}
 GLYPHS = None          # 기본 TTF 글꼴이 가진 글자 코드 집합 (None이면 대체 처리 안 함)
@@ -4798,7 +4808,12 @@ def run_parser(e, ctx):
         e["title"] += " " + suffix
         return dict(d=d, labels=labels, groups=groups)
     if k == "body":
-        return dict(body=parse_body(pg))
+        d = dict(body=parse_body(pg), fig=None)
+        try:
+            d["fig"] = body_figure(pg)
+        except Exception as ex:                              # 그림을 복원하지 못하면 표로 대체
+            e["note"] = f"원본 그림 복원 실패 → 표로 대체 ({ex})"
+        return d
     if k == "ages":
         labels, groups, suffix = _pick_labels(e["text"])
         rows = parse_ages(pg, len(labels))
@@ -4870,12 +4885,12 @@ def _dlen(s):
     return sum(2 if ord(ch) > 0x2E80 else 1 for ch in s)
 
 
-def grid_table(head_n, rows):
+def grid_table(head_n, rows, width=None):
     """범용 쪽의 표를 그대로 표로 옮긴다. 열 폭은 글자 길이에 비례, 열이 많으면 글자 크기를 줄인다."""
     n = len(rows[0])
     size = 8 if n <= 6 else 7 if n <= 10 else 6.2 if n <= 14 else 5.5
     weights = [min(max(max(_dlen(r[j]) for r in rows) + 2, 4), 30) for j in range(n)]
-    widths = [CW * w / sum(weights) for w in weights]
+    widths = [(width or CW) * w / sum(weights) for w in weights]
     data = []
     for i, r in enumerate(rows):
         if i > head_n and r[0] and r[0] == rows[i - 1][0]:      # 앞 행과 같은 구분 값은 한 번만 표시
@@ -4883,7 +4898,7 @@ def grid_table(head_n, rows):
         if i < head_n:
             data.append([cell(esc(v), size, 1, True, colors.white) for v in r])
         else:
-            data.append([cell(esc(v), size, 2 if _is_num(v) else 0, j == 0) for j, v in enumerate(r)])
+            data.append([cell(esc(v), size, 2 if (_is_num(v) or v == "-") else 0, j == 0) for j, v in enumerate(r)])
     t = Table(data, colWidths=widths, repeatRows=head_n)
     t.setStyle(TableStyle(_BASE_STYLE + [("BACKGROUND", (0, 0), (-1, head_n - 1), NAVY),
                                          ("ROWBACKGROUNDS", (0, head_n), (-1, -1), [colors.white, LIGHT])]))
@@ -4921,7 +4936,7 @@ def generic_items(page):
 
 def story_generic(e):
     rest, grids, unit = generic_items(e["page"])
-    st = page_header(e["title"], e["n"], f"단위: {unit}" if unit else "")
+    st = page_header(e["title"], e["n"], f"단위: {unit}" if unit else "", WCW)
     nt = _nos(e["title"])
     rest = [l for l in rest if _nos(l) not in nt and nt not in _nos(l)]      # 쪽 제목과 같은 줄은 제외
     if not rest and not grids:
@@ -4934,7 +4949,7 @@ def story_generic(e):
     for c in rest:
         st.append(Paragraph(c, S["gen"], bulletText="•"))
     for head_n, rows in grids:
-        st += [Spacer(1, 5), grid_table(head_n, rows)]
+        st += [Spacer(1, 5), grid_table(head_n, rows, WCW)]
     return st
 
 
@@ -4957,9 +4972,9 @@ def h2(text):
     return Paragraph(text, S["h2"])
 
 
-def page_header(title, src, sub=""):
+def page_header(title, src, sub="", width=None):
     t = Table([[Paragraph(title, S["title"]), Paragraph(f"원본 p.{src}", S["tag"])]],
-              colWidths=[CW - 30 * mm, 30 * mm])
+              colWidths=[(width or CW) - 30 * mm, 30 * mm])
     t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), NAVY), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                            ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
                            ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
@@ -5061,6 +5076,89 @@ def status_cell(s):
 
 def num_size(w_mm):
     return 7.5 if w_mm >= 14 else 6.5 if w_mm >= 10 else 5.8
+
+
+# ----------------------------------------------------------------------------
+# 4-B. 신체부위별 보장현황 — 원본 모양 그대로 복원
+#      원본 쪽을 그림으로 잘라 인체·장기 아이콘·점선·범례 표식은 그대로 쓰고,
+#      글자(항목·금액·범례·단위)는 지운 뒤 같은 위치에 다시 그린다. (숫자·색은 원본 그대로)
+# ----------------------------------------------------------------------------
+BODY_DPI = 200
+_BODY_LABELS = {lab for _, labs in BODY_GROUPS for lab in labs}
+
+
+def _pdf_color(c):
+    try:
+        c = tuple(c) if isinstance(c, (list, tuple)) else (c,)
+        if len(c) == 1:
+            return colors.Color(c[0], c[0], c[0])
+        if len(c) == 3:
+            return colors.Color(*c)
+        if len(c) == 4:
+            return colors.CMYKColor(*c)
+    except Exception:
+        pass
+    return INK
+
+
+def body_figure(page):
+    """원본 신체부위별 보장현황 쪽 → 그림(글자 제거) + 글자 목록. 실패하면 예외를 낸다."""
+    from PIL import ImageDraw
+    W, H = float(page.width), float(page.height)
+    words = page.extract_words(extra_attrs=["non_stroking_color", "size"])
+    items = [w for w in words if w["text"] in _BODY_LABELS]
+    if not items:
+        raise ParseError("항목 글자를 찾지 못했습니다.")
+    last_bottom = max(w["bottom"] for w in items)
+    titles = [w for w in words if "신체부위별" in w["text"] or "보장현황" in w["text"]]
+    y0 = (max(w["bottom"] for w in titles) + 0.012 * H) if titles else 0.0
+    y1 = min(last_bottom + 0.06 * H, H)
+    below = [w["top"] for w in words if w["top"] > last_bottom + 1]
+    if below:
+        y1 = min(y1, min(below) - 1)                      # 쪽 아래의 안내 문구는 제외
+    if y1 - y0 < 50:
+        raise ParseError("그림 영역을 정하지 못했습니다.")
+    img = page.crop((0, y0, W, y1)).to_image(resolution=BODY_DPI).original.convert("RGB")
+    k = BODY_DPI / 72.0
+    inside = [w for w in words if w["top"] >= y0 - 0.5 and w["bottom"] <= y1 + 0.5]
+    dr = ImageDraw.Draw(img)
+    for w in inside:                                       # 원본 글자 지우기
+        dr.rectangle([w["x0"] * k - 1, (w["top"] - y0) * k - 1, w["x1"] * k + 1, (w["bottom"] - y0) * k + 1],
+                     fill=(255, 255, 255))
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    text = [dict(t=w["text"], x0=w["x0"], x1=w["x1"], top=w["top"] - y0, bottom=w["bottom"] - y0,
+                 size=float(w.get("size") or (w["bottom"] - w["top"])), color=_pdf_color(w.get("non_stroking_color")),
+                 num=bool(re.fullmatch(r"[\d,]+", w["text"]))) for w in inside]
+    return dict(png=buf.getvalue(), w=W, h=y1 - y0, text=text)
+
+
+class BodyMap(Flowable):
+    """body_figure 결과를 가로 폭에 맞춰 그린다 (비율 유지)."""
+
+    def __init__(self, fig, width):
+        super().__init__()
+        self.fig, self.k = fig, width / fig["w"]
+        self.width, self.height = width, fig["h"] * self.k
+
+    def wrap(self, aw, ah):
+        return self.width, self.height
+
+    def draw(self):
+        c, f, k = self.canv, self.fig, self.k
+        c.drawImage(ImageReader(io.BytesIO(f["png"])), 0, 0, self.width, self.height)
+        for w in f["text"]:
+            size = w["size"] * k
+            font = FONT
+            if GLYPHS and any(ord(ch) >= 128 and ord(ch) not in GLYPHS for ch in w["t"]):
+                font = CID_FALLBACK
+            c.setFont(font, size)
+            c.setFillColor(w["color"])
+            y = self.height - w["bottom"] * k + 0.22 * size
+            if w["num"]:
+                c.drawRightString(w["x1"] * k, y, w["t"])
+            else:
+                c.drawString(w["x0"] * k, y, w["t"])
 
 
 # ----------------------------------------------------------------------------
@@ -5179,6 +5277,8 @@ def story_products(d, src, title, labels, groups):
 
 
 def story_body(d, src):
+    if d.get("fig"):                                         # 원본 모양 그대로
+        return page_header("신체부위별 보장현황", src) + [BodyMap(d["fig"], CW)]
     body = d["body"]
     st = page_header("신체부위별 보장현황", src, "단위: 만원")
     cnt = {"충분": 0, "부족": 0, "미보장": 0}
@@ -5219,13 +5319,15 @@ def story_ages(title, src, rows, labels, groups):
 # 6. PDF 조립
 # ----------------------------------------------------------------------------
 def draw_footer(canvas, doc):
+    pw, ph = canvas._pagesize
+    mx, ly = (W_MARGIN_X, 12 * mm) if pw > ph else (MARGIN_X, 14 * mm)
     canvas.saveState()
     canvas.setStrokeColor(colors.HexColor("#D1D5DB"))
-    canvas.line(MARGIN_X, 14 * mm, PAGE_W - MARGIN_X, 14 * mm)
+    canvas.line(mx, ly, pw - mx, ly)
     canvas.setFont(FONT, 7.5)
     canvas.setFillColor(GRAY)
-    canvas.drawString(MARGIN_X, 10 * mm, doc.footer_left)
-    canvas.drawRightString(PAGE_W - MARGIN_X, 10 * mm, f"{canvas.getPageNumber()} / {doc.total_pages}")
+    canvas.drawString(mx, ly - 4 * mm, doc.footer_left)
+    canvas.drawRightString(pw - mx, ly - 4 * mm, f"{canvas.getPageNumber()} / {doc.total_pages}")
     canvas.restoreState()
 
 
@@ -5248,11 +5350,16 @@ def make_story(e, ctx):
     return story_generic(e)
 
 
-def natural_height(flowables):
+def natural_height(flowables, width=None):
     h = 0
     for f in flowables:
-        h += f.wrap(CW, 10 ** 6)[1] + f.getSpaceBefore() + f.getSpaceAfter()
+        h += f.wrap(width or CW, 10 ** 6)[1] + f.getSpaceBefore() + f.getSpaceAfter()
     return h
+
+
+def is_wide(e):
+    """범용 요약 쪽(전용 양식이 없거나 읽기에 실패한 쪽)은 16:9 가로 쪽으로 만든다."""
+    return e["mode"] != "전용"
 
 
 def build_pdf(entries, ctx, out_path):
@@ -5260,28 +5367,37 @@ def build_pdf(entries, ctx, out_path):
     ctx["entries"] = entries
     cv = ctx["cover"]
     stories = [make_story(e, ctx) for e in entries]
-    brand = brand_header()                                # 첫 쪽에는 항상 로고·펭귄을 넣고, 이 부분은 축소하지 않는다
-    brand_h = natural_height(brand) if brand else 0
-    for e, st in zip(entries, stories):
-        h = natural_height(st)
-        if h > FH * 1.5:
-            print(f"[주의] 원본 p.{e['n']}: 내용이 많아 약 {int(FH / h * 100)}% 크기로 축소됩니다.")
+    wides = [is_wide(e) for e in entries]
+    for e, st, wd in zip(entries, stories, wides):
+        h = natural_height(st, WCW if wd else CW)
+        fh = WFH if wd else FH
+        if h > fh * 1.5:
+            print(f"[주의] 원본 p.{e['n']}: 내용이 많아 약 {int(fh / h * 100)}% 크기로 축소됩니다.")
     name = ctx["name"]
     doc = BaseDocTemplate(str(out_path), pagesize=A4, title=f"{name} 보장분석 요약 보고서",
                           author=cv.get("fp", ""), leftMargin=MARGIN_X, rightMargin=MARGIN_X)
     doc.total_pages = len(entries)
     doc.footer_left = (f"{name} 고객님 보장분석 요약 · {ctx['basis'] or cv.get('print_date', '')} 기준 · "
                        "보험금 지급 근거 아님, 약관·증권 우선")
-    frame = Frame(MARGIN_X, FRAME_BOTTOM, CW, FH, leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
-    doc.addPageTemplates([PageTemplate(id="main", frames=[frame], onPage=draw_footer)])
+    main_t = PageTemplate(id="main", pagesize=A4, onPage=draw_footer,
+                          frames=[Frame(MARGIN_X, FRAME_BOTTOM, CW, FH, leftPadding=0, rightPadding=0,
+                                        topPadding=0, bottomPadding=0)])
+    wide_t = PageTemplate(id="wide", pagesize=(WIDE_W, WIDE_H), onPage=draw_footer,
+                          frames=[Frame(W_MARGIN_X, W_BOTTOM, WCW, WFH, leftPadding=0, rightPadding=0,
+                                        topPadding=0, bottomPadding=0)])
+    doc.addPageTemplates([wide_t, main_t] if wides and wides[0] else [main_t, wide_t])   # 첫 쪽 양식이 먼저
     story = []
     for i, st in enumerate(stories):
+        cw, fh = (WCW, WFH) if wides[i] else (CW, FH)
         if i == 0:
+            brand = brand_header(cw)                       # 첫 쪽에는 항상 로고·펭귄을 넣고, 이 부분은 축소하지 않는다
+            brand_h = natural_height(brand, cw) if brand else 0
             story.extend(brand)
-            story.append(KeepInFrame(CW, FH - brand_h - 2, st, mode="shrink"))    # 이미지 아래 내용만 축소
+            story.append(KeepInFrame(cw, fh - brand_h - 2, st, mode="shrink"))   # 이미지 아래 내용만 축소
         else:
-            story.append(KeepInFrame(CW, FH, st, mode="shrink"))                  # 넘치면 축소해서 한 쪽에 맞춤
+            story.append(KeepInFrame(cw, fh, st, mode="shrink"))                 # 넘치면 축소해서 한 쪽에 맞춤
         if i < len(stories) - 1:
+            story.append(NextPageTemplate("wide" if wides[i + 1] else "main"))
             story.append(PageBreak())
     doc.build(story)
 
