@@ -1,4 +1,4 @@
-# 2026-11-15 07:29 KST | 수정: 쪽 수 고정(8·26쪽) 제거 → 쪽 제목으로 쪽 종류를 자동 인식해 원본 N쪽 = 요약 N쪽 1:1, 미확인 양식 쪽은 범용 요약
+# 2026-11-15 07:48 KST | 수정: 실행 시 PDF 선택 창(tkinter) 추가 — 원본 선택·저장 위치·진행 로그·완료 후 열기, 인자를 주면 기존 명령줄 방식 유지
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -49,21 +49,37 @@
   pip install pdfplumber reportlab pypdf
 
 사용
-  python gaejang_summary_report_v2.py 고순종.pdf
-  python gaejang_summary_report_v2.py 고순종.pdf 고순종_요약.pdf
-  python gaejang_summary_report_v2.py 고순종.pdf --generic   (모든 쪽을 범용 요약으로 — 점검용)
+  1) 창으로 쓰기   : python gaejang_summary_report_v3.py
+                     → [PDF 선택...] 으로 원본을 고르고 [요약 PDF 만들기]를 누른다.
+                       저장 위치를 바꾸지 않으면 원본과 같은 폴더에 '<원본이름>_요약.pdf' 로 저장된다.
+                       (검은 콘솔 창 없이 쓰려면 파일 이름을 .pyw 로 바꿔 더블클릭)
+  2) 명령줄로 쓰기 : python gaejang_summary_report_v3.py 고순종.pdf
+                     python gaejang_summary_report_v3.py 고순종.pdf 고순종_요약.pdf
+                     python gaejang_summary_report_v3.py 고순종.pdf --generic   (모든 쪽을 범용 요약으로 — 점검용)
 
 한글 글꼴
   Windows는 '맑은 고딕'(malgun.ttf)을 자동 사용한다. 다른 환경에서는 스크립트와 같은 폴더의
   fonts/NanumGothic.ttf, fonts/NanumGothicBold.ttf 를 찾고, 없으면 내장 CID 글꼴(HYGothic)로 대체한다.
 """
+import contextlib
+import io
 import os
+import queue
 import re
+import subprocess
 import sys
+import threading
+import traceback
 from pathlib import Path
 from xml.sax.saxutils import escape as _xml_escape
 
 import pdfplumber
+
+try:                                   # PDF 선택 창(GUI). 없으면 명령줄 방식만 사용한다.
+    import tkinter as tk
+    from tkinter import filedialog, messagebox, ttk
+except ImportError:
+    tk = None
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
@@ -155,7 +171,18 @@ def esc(text):
     return "".join(out)
 
 
+_FONTS_READY = False
+
+
 def register_fonts():
+    global _FONTS_READY
+    if _FONTS_READY:
+        return
+    _FONTS_READY = True
+    _register_fonts()
+
+
+def _register_fonts():
     """한글 글꼴 등록. TTF를 못 찾으면 내장 CID 글꼴로 대체."""
     global FONT, FONT_B, GLYPHS
     here = Path(__file__).resolve().parent
@@ -910,14 +937,8 @@ def build_pdf(entries, ctx, out_path):
     doc.build(story)
 
 
-def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    force_generic = "--generic" in sys.argv
-    if not args:
-        print(__doc__)
-        sys.exit(1)
-    src = Path(args[0])
-    out = Path(args[1]) if len(args) > 1 else src.with_name(src.stem + "_요약.pdf")
+def convert(src, out, force_generic=False):
+    """PDF 한 개를 요약 PDF로 변환한다. 진행 내용은 print 로 알린다. -> (요약 쪽수, 원본 쪽수)"""
     register_fonts()
     with pdfplumber.open(str(src)) as pdf:
         n_src = len(pdf.pages)
@@ -926,14 +947,276 @@ def main():
         for e in entries:
             print(f"  p.{e['n']:>2}  {e['title']}  [{e['mode']}]" + (f"  ※ {e['note']}" if e["note"] else ""))
         build_pdf(entries, ctx, out)
+    n_out = None
     try:
         from pypdf import PdfReader
-        n = len(PdfReader(str(out)).pages)
-        print(f"[완료] {out}  (요약 {n}쪽 / 원본 {n_src}쪽)")
-        if n != n_src:
+        n_out = len(PdfReader(str(out)).pages)
+        print(f"[완료] {out}  (요약 {n_out}쪽 / 원본 {n_src}쪽)")
+        if n_out != n_src:
             print("[경고] 쪽수가 원본과 다릅니다. 내용이 한 쪽을 넘쳤는지 확인하세요.")
     except ImportError:
         print(f"[완료] {out}")
+    return n_out, n_src
+
+
+# ----------------------------------------------------------------------------
+# 7. PDF 선택 창 (tkinter)
+# ----------------------------------------------------------------------------
+def open_path(path):
+    """운영체제 기본 프로그램으로 파일/폴더 열기."""
+    path = str(path)
+    if sys.platform.startswith("win"):
+        os.startfile(path)                                    # noqa: S606 (Windows 전용)
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", path])
+    else:
+        subprocess.Popen(["xdg-open", path])
+
+
+class _QueueWriter(io.TextIOBase):
+    """print 출력을 창의 로그로 보내기 위한 쓰기 도우미."""
+
+    def __init__(self, q):
+        self.q = q
+
+    def write(self, text):
+        if text:
+            self.q.put(("log", text))
+        return len(text)
+
+
+class App:
+    def __init__(self, root):
+        self.root = root
+        self.q = queue.Queue()
+        self.result = None
+        self.running = False
+        self.finished = False                 # (테스트·점검용) 한 번 변환이 끝나면 True
+        self.manual_out = False               # 저장 위치를 직접 골랐는가
+        self.last_dir = str(Path.home())
+        self.src_var, self.out_var = tk.StringVar(), tk.StringVar()
+        self.gen_var = tk.BooleanVar(value=False)
+        self.status_var = tk.StringVar(value="PDF를 선택하세요.")
+
+        root.title("보장분석 요약 PDF 만들기")
+        root.geometry("760x540")
+        root.minsize(640, 460)
+        frm = ttk.Frame(root, padding=14)
+        frm.pack(fill="both", expand=True)
+        frm.columnconfigure(1, weight=1)
+        frm.rowconfigure(5, weight=1)
+
+        ttk.Label(frm, text="교보생명 보장분석 보고서 PDF를 골라 쪽별 1:1 요약 PDF를 만듭니다.",
+                  foreground="#555555").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+
+        ttk.Label(frm, text="원본 PDF").grid(row=1, column=0, sticky="w", padx=(0, 8))
+        ttk.Entry(frm, textvariable=self.src_var, state="readonly").grid(row=1, column=1, sticky="ew")
+        self.btn_pick = ttk.Button(frm, text="PDF 선택...", command=self.pick_src)
+        self.btn_pick.grid(row=1, column=2, padx=(8, 0))
+
+        ttk.Label(frm, text="저장 위치").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=(8, 0))
+        ttk.Entry(frm, textvariable=self.out_var).grid(row=2, column=1, sticky="ew", pady=(8, 0))
+        self.btn_out = ttk.Button(frm, text="저장 위치...", command=self.pick_out)
+        self.btn_out.grid(row=2, column=2, padx=(8, 0), pady=(8, 0))
+
+        self.chk = ttk.Checkbutton(frm, text="모든 쪽을 범용 요약으로 만들기 (점검용)", variable=self.gen_var)
+        self.chk.grid(row=3, column=1, sticky="w", pady=(8, 0))
+
+        bar = ttk.Frame(frm)
+        bar.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(12, 8))
+        bar.columnconfigure(1, weight=1)
+        self.btn_run = ttk.Button(bar, text="요약 PDF 만들기", command=self.start)
+        self.btn_run.grid(row=0, column=0)
+        self.progress = ttk.Progressbar(bar, mode="indeterminate")
+        self.progress.grid(row=0, column=1, sticky="ew", padx=10)
+        self.btn_open = ttk.Button(bar, text="요약 PDF 열기", command=self.open_result, state="disabled")
+        self.btn_open.grid(row=0, column=2)
+        self.btn_folder = ttk.Button(bar, text="폴더 열기", command=self.open_folder, state="disabled")
+        self.btn_folder.grid(row=0, column=3, padx=(6, 0))
+
+        box = ttk.Frame(frm)
+        box.grid(row=5, column=0, columnspan=3, sticky="nsew")
+        box.rowconfigure(0, weight=1)
+        box.columnconfigure(0, weight=1)
+        self.text = tk.Text(box, height=12, wrap="word", state="disabled", background="#F7F8FA", relief="flat",
+                            borderwidth=1)
+        sb = ttk.Scrollbar(box, command=self.text.yview)
+        self.text.configure(yscrollcommand=sb.set)
+        self.text.grid(row=0, column=0, sticky="nsew")
+        sb.grid(row=0, column=1, sticky="ns")
+        ttk.Label(frm, textvariable=self.status_var).grid(row=6, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        self._center()
+        self.root.after(100, self._poll)
+
+    # ---- 화면 도우미
+    def _center(self):
+        self.root.update_idletasks()
+        w, h = self.root.winfo_width(), self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() - w) // 2
+        y = (self.root.winfo_screenheight() - h) // 3
+        self.root.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+
+    def log(self, text):
+        self.text.configure(state="normal")
+        self.text.insert("end", text)
+        self.text.see("end")
+        self.text.configure(state="disabled")
+
+    def set_busy(self, busy):
+        self.running = busy
+        state = "disabled" if busy else "normal"
+        for w in (self.btn_pick, self.btn_out, self.btn_run, self.chk):
+            w.configure(state=state)
+        if busy:
+            self.progress.start(12)
+            for w in (self.btn_open, self.btn_folder):
+                w.configure(state="disabled")
+        else:
+            self.progress.stop()
+
+    # ---- 파일 선택
+    def set_source(self, path):
+        path = str(path)
+        self.src_var.set(path)
+        self.last_dir = str(Path(path).parent)
+        if not self.manual_out:
+            self.out_var.set(str(Path(path).with_name(Path(path).stem + "_요약.pdf")))
+        self.status_var.set("[요약 PDF 만들기]를 누르세요.")
+
+    def pick_src(self):
+        path = filedialog.askopenfilename(title="원본 보장분석 보고서 PDF 선택", initialdir=self.last_dir,
+                                          filetypes=[("PDF 파일", "*.pdf"), ("모든 파일", "*.*")])
+        if path:
+            self.set_source(path)
+
+    def pick_out(self):
+        cur = Path(self.out_var.get()) if self.out_var.get() else None
+        path = filedialog.asksaveasfilename(title="요약 PDF 저장 위치", defaultextension=".pdf",
+                                            initialdir=str(cur.parent) if cur else self.last_dir,
+                                            initialfile=cur.name if cur else "요약.pdf",
+                                            filetypes=[("PDF 파일", "*.pdf")])
+        if path:
+            self.out_var.set(path)
+            self.manual_out = True
+
+    # ---- 변환
+    def start(self):
+        if self.running:
+            return
+        src = Path(self.src_var.get().strip().strip('"'))
+        if not src.is_file():
+            messagebox.showwarning("PDF 선택", "먼저 원본 PDF를 선택하세요.")
+            return
+        if src.suffix.lower() != ".pdf":
+            messagebox.showwarning("PDF 선택", "PDF 파일(.pdf)을 선택하세요.")
+            return
+        out = Path(self.out_var.get().strip().strip('"'))
+        if not out.name:
+            messagebox.showwarning("저장 위치", "저장할 파일 이름을 입력하세요.")
+            return
+        if out.suffix.lower() != ".pdf":
+            out = out.with_suffix(".pdf")
+            self.out_var.set(str(out))
+        if out.resolve() == src.resolve():
+            messagebox.showerror("저장 위치", "원본 PDF와 같은 파일에는 저장할 수 없습니다.\n저장 위치를 바꿔 주세요.")
+            return
+        if out.exists() and not self.manual_out:
+            if not messagebox.askyesno("덮어쓰기", f"같은 이름의 파일이 이미 있습니다.\n덮어쓸까요?\n\n{out}"):
+                return
+        try:
+            out.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as ex:
+            messagebox.showerror("저장 위치", f"저장 폴더를 만들 수 없습니다.\n{ex}")
+            return
+        self.text.configure(state="normal")
+        self.text.delete("1.0", "end")
+        self.text.configure(state="disabled")
+        self.finished = False
+        self.result = None
+        self.status_var.set("변환 중입니다...")
+        self.set_busy(True)
+        threading.Thread(target=self._worker, args=(src, out, self.gen_var.get()), daemon=True).start()
+
+    def _worker(self, src, out, generic):
+        try:
+            with contextlib.redirect_stdout(_QueueWriter(self.q)):
+                n_out, n_src = convert(src, out, generic)
+            self.q.put(("done", (out, n_out, n_src)))
+        except Exception as ex:                                    # 어떤 오류든 창에 보여 준다
+            self.q.put(("log", traceback.format_exc()))
+            self.q.put(("error", ex))
+
+    def _poll(self):
+        try:
+            while True:
+                kind, payload = self.q.get_nowait()
+                if kind == "log":
+                    self.log(payload)
+                elif kind == "done":
+                    self._on_done(*payload)
+                elif kind == "error":
+                    self._on_error(payload)
+        except queue.Empty:
+            pass
+        self.root.after(100, self._poll)
+
+    def _on_done(self, out, n_out, n_src):
+        self.set_busy(False)
+        self.finished = True
+        self.result = Path(out)
+        for w in (self.btn_open, self.btn_folder):
+            w.configure(state="normal")
+        same = (n_out is None) or (n_out == n_src)
+        self.status_var.set(f"완료: 원본 {n_src}쪽 → 요약 {n_out if n_out is not None else '?'}쪽  |  {out}")
+        if same:
+            if messagebox.askyesno("완료", f"요약 PDF를 만들었습니다. ({n_src}쪽)\n{out}\n\n지금 열어 볼까요?"):
+                self.open_result()
+        else:
+            messagebox.showwarning("쪽수 확인", f"원본 {n_src}쪽, 요약 {n_out}쪽으로 쪽수가 다릅니다.\n로그를 확인하세요.")
+
+    def _on_error(self, ex):
+        self.set_busy(False)
+        self.finished = True
+        self.status_var.set("오류가 발생했습니다. 아래 로그를 확인하세요.")
+        hint = ""
+        if isinstance(ex, PermissionError):
+            hint = "\n\n저장하려는 PDF가 다른 프로그램에서 열려 있으면 닫고 다시 시도하세요."
+        messagebox.showerror("변환 실패", f"{ex}{hint}")
+
+    # ---- 결과 열기
+    def open_result(self):
+        if self.result and self.result.exists():
+            open_path(self.result)
+
+    def open_folder(self):
+        if self.result:
+            open_path(self.result.parent)
+
+
+def run_gui():
+    try:                                              # 윈도우 고해상도 화면에서 글자 흐림 방지
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        pass
+    root = tk.Tk()
+    App(root)
+    root.mainloop()
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    force_generic = "--generic" in sys.argv
+    if not args:                                      # 인자가 없으면 PDF 선택 창을 연다
+        if tk is None:
+            print("tkinter를 사용할 수 없어 창을 열 수 없습니다. 명령줄로 PDF 경로를 지정하세요.\n")
+            print(__doc__)
+            sys.exit(1)
+        run_gui()
+        return
+    src = Path(args[0])
+    out = Path(args[1]) if len(args) > 1 else src.with_name(src.stem + "_요약.pdf")
+    convert(src, out, force_generic)
 
 
 if __name__ == "__main__":
