@@ -1,8 +1,10 @@
-# 2026-11-15 00:38 KST | 수정: 교보 보장분석 보고서(26쪽) → 1:1 요약 PDF 생성 코드, 글꼴에 없는 한자(無·多)·Ⅱ는 임베드 가능한 대체 TTF → CID 순으로 자동 대체
+# 2026-11-15 07:29 KST | 수정: 쪽 수 고정(8·26쪽) 제거 → 쪽 제목으로 쪽 종류를 자동 인식해 원본 N쪽 = 요약 N쪽 1:1, 미확인 양식 쪽은 범용 요약
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
-교보생명 '보장분석 보고서'(26쪽 양식) PDF를 읽어서, 같은 쪽수(26쪽)의 요약 PDF를 만든다.
+교보생명 '보장분석 보고서' PDF를 읽어서, 같은 쪽수·같은 순서의 요약 PDF를 만든다.
+아래 목록은 '전체 양식(26쪽)'의 기준 구성이다. 실제 PDF는 이보다 쪽이 줄거나 늘어도 되며,
+쪽 번호가 아니라 쪽 제목을 보고 종류를 판별해 원본 p.N → 요약 p.N 으로 1:1 대응시킨다.
 
   원본 p.1 표지          → 요약 p.1
   원본 p.2 Pride of KYOBO → 요약 p.2
@@ -31,18 +33,25 @@
   원본 p.25 신체부위별 보장현황 전/후 비교 → 요약 p.25
   원본 p.26 보장밸런스(그래프) 전/후 비교 → 요약 p.26
 
+쪽 종류별 처리
+  전용 요약: 표지, 보험 가입 현황, 세대 분석, 상품별 분석, 신체부위별 보장현황, 연령별 분석
+  범용 요약: 그 밖의 모든 쪽(Pride of KYOBO, 종합요약, 보장밸런스, 보장항목별 분석, 보장 제안,
+             전/후 비교 등). 원문 글자와 표를 문장으로 정리하며, 숫자는 원본 그대로 옮긴다.
+  전용 양식으로 읽다가 실패한 쪽도 자동으로 범용 요약으로 처리한다. (실행 시 쪽별 처리 결과를 출력)
+
 원칙
   1) 숫자는 원본 문자열을 그대로 사용한다. (계산·반올림·단위 변환 없음)
   2) 표는 표로 옮기지 않고 문장/항목 텍스트로 풀어 쓴다.
   3) 계약자·주피·종피 반복, 안내 문구 3줄, 빈 행 등 중요하지 않은 내용은 뺀다.
-  4) 원본 1쪽 = 요약 1쪽. 내용이 넘치면 글자 크기를 줄여서라도 한 쪽에 맞춘다.
+  4) 원본 N쪽 = 요약 N쪽 (쪽 수가 바뀌어도 항상 1:1). 내용이 넘치면 글자 크기를 줄여서라도 한 쪽에 맞춘다.
 
 설치
   pip install pdfplumber reportlab pypdf
 
 사용
-  python gaejang_summary_report.py 고순종.pdf
-  python gaejang_summary_report.py 고순종.pdf 고순종_요약.pdf
+  python gaejang_summary_report_v2.py 고순종.pdf
+  python gaejang_summary_report_v2.py 고순종.pdf 고순종_요약.pdf
+  python gaejang_summary_report_v2.py 고순종.pdf --generic   (모든 쪽을 범용 요약으로 — 점검용)
 
 한글 글꼴
   Windows는 '맑은 고딕'(malgun.ttf)을 자동 사용한다. 다른 환경에서는 스크립트와 같은 폴더의
@@ -67,10 +76,8 @@ from reportlab.platypus import (BaseDocTemplate, Frame, HRFlowable, KeepInFrame,
                                 TableStyle)
 
 # ----------------------------------------------------------------------------
-# 1. 양식 상수 (교보생명 보장분석 보고서 8쪽 양식의 열 순서)
+# 1. 양식 상수 (교보생명 보장분석 보고서 표의 열 순서)
 # ----------------------------------------------------------------------------
-EXPECTED_PAGES = 26
-
 # 사망·진단 표 (18열)
 LABELS_A = ["일반사망", "암사망", "재해사망",
             "일반암", "고액암", "소액암", "뇌출혈", "뇌경색", "급성심근경색", "뇌혈관질환",
@@ -95,16 +102,6 @@ BODY_GROUPS = [("뇌", ["뇌출혈", "뇌경색", "뇌혈관질환", "산정특�
                ("치매", ["LTC(치매)", "중등도치매", "경도치매"]),
                ("심장", ["급성심근경색", "허혈성심장질환", "산정특례(심장)"]),
                ("말기 장기질환", ["말기폐질환", "말기간질환", "말기신부전증"])]
-
-PAGE_TITLES = {
-    2: "보험 가입 현황",
-    3: "세대 분석",
-    4: "상품별 분석 (1/2) 사망·진단",
-    5: "상품별 분석 (2/2) 항암·수술·입원·통원·실손",
-    6: "신체부위별 보장현황",
-    7: "연령별 분석 (1/2) 사망·진단",
-    8: "연령별 분석 (2/2) 항암·수술·입원·통원·실손",
-}
 
 # ----------------------------------------------------------------------------
 # 2. 글꼴 / 색 / 스타일
@@ -202,6 +199,8 @@ def build_styles():
     base = dict(fontName=FONT, textColor=INK)
     S["body"] = ParagraphStyle("body", fontSize=9.5, leading=14, **base)
     S["bullet"] = ParagraphStyle("bullet", parent=S["body"], leftIndent=11, bulletIndent=1, spaceAfter=3)
+    S["gen"] = ParagraphStyle("gen", parent=S["body"], fontSize=8.8, leading=12.2, leftIndent=11, bulletIndent=1,
+                              spaceAfter=2)
     S["h2"] = ParagraphStyle("h2", fontName=FONT_B, fontSize=11, leading=15, textColor=NAVY,
                              spaceBefore=9, spaceAfter=3)
     S["sub"] = ParagraphStyle("sub", fontName=FONT, fontSize=8.5, leading=12, textColor=GRAY)
@@ -372,21 +371,249 @@ def parse_ages(page, n_labels):
     return rows
 
 
-def parse_report(pdf):
-    if len(pdf.pages) != EXPECTED_PAGES:
-        raise ParseError(f"원본이 {len(pdf.pages)}쪽입니다. 이 코드는 {EXPECTED_PAGES}쪽 보장분석 보고서 양식 전용입니다.")
-    P_ = pdf.pages
-    info, contracts = parse_enrollment(P_[1])
-    data = dict(cover=parse_cover(P_[0]), info=info, contracts=contracts)
-    data["gen_counts"], data["members"] = parse_generation(P_[2])
-    data["prod1"] = parse_products(P_[3], LABELS_A)
-    data["prod2"] = parse_products(P_[4], LABELS_B)
-    for k in ("prod1", "prod2"):
-        canonical_names(data[k]["products"], contracts)
-    data["body"] = parse_body(P_[5])
-    data["ages1"] = parse_ages(P_[6], len(LABELS_A))
-    data["ages2"] = parse_ages(P_[7], len(LABELS_B))
-    return data
+# ----------------------------------------------------------------------------
+# 3-B. 쪽 종류 자동 인식 (쪽 번호가 아니라 '쪽 제목'으로 판단) + 범용 요약
+# ----------------------------------------------------------------------------
+# (제목 키워드, 종류). 전용 요약 양식이 있는 종류만 generic 이 아니다.
+KINDS = [
+    ("Pride of KYOBO", "generic"),
+    ("종합요약", "generic"),
+    ("보험 가입 현황", "enrollment"),
+    ("세대 분석", "generation"),
+    ("상품별 분석", "products"),
+    ("신체부위별 보장현황", "body"),
+    ("보장밸런스", "generic"),
+    ("연령별 분석", "ages"),
+    ("보장항목별 분석", "generic"),
+    ("보장 제안", "generic"),
+]
+COMPARE_KEY = "전/후 비교"       # 제목에 이 말이 있으면 전용 양식이 없으므로 항상 범용 요약
+
+
+def _nos(s):
+    return re.sub(r"\s+", "", s)
+
+
+def title_zone(text, n=6):
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    return " ".join(lines[:n])
+
+
+def find_part(text, kw):
+    """'제목 (1/2)', '제목 1/6' 같은 쪽 순번을 찾는다."""
+    pat = r"\s*".join(re.escape(c) for c in kw.replace(" ", ""))
+    m = re.search(pat + r"[^\d\n]{0,14}?\(?\s*(\d+)\s*/\s*(\d+)\s*\)?", text)
+    return f"{m.group(1)}/{m.group(2)}" if m else ""
+
+
+def classify(idx, text):
+    """-> (종류, 표시 제목, 순번)"""
+    zone = _nos(title_zone(text)).lower()
+    if idx == 0 and "고객님을위한" in zone:
+        return "cover", "표지", ""
+    compare = _nos(COMPARE_KEY) in zone
+    best = None
+    for kw, kind in KINDS:
+        pos = zone.find(_nos(kw).lower())
+        if pos >= 0 and (best is None or pos < best[0]):
+            best = (pos, kw, kind)
+    if best:
+        _, kw, kind = best
+        base = kw + (" " + COMPARE_KEY if compare else "")
+        part = find_part(text, base)
+        return ("generic" if compare else kind), base + (f" ({part})" if part else ""), part
+    if compare:
+        part = find_part(text, COMPARE_KEY)
+        return "generic", COMPARE_KEY + (f" ({part})" if part else ""), part
+    first = next((l.strip() for l in text.splitlines() if l.strip()), "")
+    return "generic", (first[:30] or "(내용 없음)"), ""
+
+
+def find_basis(texts):
+    for t in texts:
+        m = re.search(r"(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일 기준", t)
+        if m:
+            return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+    return ""
+
+
+def customer_name(entries):
+    for e in entries:
+        if e["kind"] == "cover" and e["mode"] == "전용" and e["data"].get("name"):
+            return e["data"]["name"]
+    for e in entries:
+        m = re.search(r"(\S+?)\s*(?:고객님의|님의)", e["text"])
+        if m:
+            return m.group(1)
+    return ""
+
+
+def _pick_labels(text):
+    if "일반사망" in text:
+        return LABELS_A, GROUPS_A, "사망·진단"
+    if "재해골절" in text:
+        return LABELS_B, GROUPS_B, "항암·수술·입원·통원·실손"
+    raise ParseError("열 구성을 알 수 없습니다.")
+
+
+def run_parser(e, ctx):
+    pg, k = e["page"], e["kind"]
+    if k == "cover":
+        d = parse_cover(pg)
+        if not d["name"]:
+            raise ParseError("고객명을 찾지 못했습니다.")
+        return d
+    if k == "enrollment":
+        info, cs = parse_enrollment(pg)
+        return dict(info=info, contracts=cs)
+    if k == "generation":
+        counts, members = parse_generation(pg)
+        return dict(counts=counts, members=members)
+    if k == "products":
+        labels, groups, suffix = _pick_labels(e["text"])
+        d = parse_products(pg, labels)
+        canonical_names(d["products"], ctx["contracts"])
+        e["title"] += " " + suffix
+        return dict(d=d, labels=labels, groups=groups)
+    if k == "body":
+        return dict(body=parse_body(pg))
+    if k == "ages":
+        labels, groups, suffix = _pick_labels(e["text"])
+        rows = parse_ages(pg, len(labels))
+        e["title"] += " " + suffix
+        return dict(rows=rows, labels=labels, groups=groups)
+    raise ParseError("전용 양식 없음")
+
+
+def analyze_pdf(pdf, force_generic=False):
+    """모든 쪽을 읽어 쪽별 항목(entries)을 만든다. 쪽 수·순서는 PDF 그대로 따른다."""
+    entries, texts = [], []
+    for i, pg in enumerate(pdf.pages):
+        text = pg.extract_text() or ""
+        texts.append(text)
+        kind, title, part = classify(i, text)
+        entries.append(dict(n=i + 1, kind=kind, title=title, part=part, text=text, page=pg,
+                            mode="범용", data=None, note=""))
+    ctx = dict(contracts=[], basis=find_basis(texts))
+    for e in sorted(entries, key=lambda x: x["kind"] != "enrollment"):    # 계약 목록(상품명 보정용)을 먼저
+        if force_generic or e["kind"] == "generic":
+            continue
+        try:
+            e["data"] = run_parser(e, ctx)
+            e["mode"] = "전용"
+            if e["kind"] == "enrollment":
+                ctx["contracts"] = e["data"]["contracts"]
+        except Exception as ex:                                            # 실패하면 범용 요약으로 대체
+            e["note"] = f"전용 양식 인식 실패 → 범용 요약 ({ex})"
+    ctx["name"] = customer_name(entries)
+    ctx["cover"] = next((e["data"] for e in entries if e["kind"] == "cover" and e["mode"] == "전용"), {})
+    return entries, ctx
+
+
+# ---- 범용 요약: 원문 글자 + 표를 문장으로 (숫자는 원본 문자열 그대로) ----
+NUM_RE = re.compile(r"-?[\d,]+(?:\.\d+)?(?:%|원|세|건|개|만원|억원)?")
+
+
+def _is_num(c):
+    return bool(NUM_RE.fullmatch(c))
+
+
+def is_boiler(s):
+    """매 쪽 반복되는 안내 문구·머리글·바닥글."""
+    return (s.startswith("*") or s.startswith("본 자료는") or "동일한 번호에 한하여" in s
+            or ("Financial Planner" in s and "|" in s)
+            or re.fullmatch(r"K\s*Y\s*O\s*B\s*O\s*L\s*I\s*F\s*E", s) is not None
+            or re.search(r"보장분석 보고서\s*\d+\s*$", s) is not None
+            or re.fullmatch(r"[-\s.·]+", s) is not None)
+
+
+def table_to_sentences(tb):
+    """표 한 개 → 행별 문장. 머리글 행(숫자가 나오기 전 행들)을 열 이름으로 쓰고, 비어 있거나 '-'인 칸은 생략."""
+    pairs = [([clean(c) for c in r], [c or "" for c in r]) for r in tb]
+    pairs = [(c, raw) for c, raw in pairs if any(c)]
+    rows, raws = [c for c, _ in pairs], [raw for _, raw in pairs]
+    if len(rows) < 2 or max(len(r) for r in rows) < 3:
+        return []
+    first = next((i for i, r in enumerate(rows) if any(_is_num(c) for c in r[1:])), None)
+    if first is None or first == 0:
+        return []
+    width = max(len(r) for r in rows)
+    headers = []
+    for j in range(width):
+        h = ""
+        for r in reversed(raws[:first]):
+            if j < len(r) and r[j].strip():
+                h = re.sub(r"\s+", "", r[j])          # 머리글의 줄바꿈은 붙여 쓴다 (급성\n심근경색 → 급성심근경색)
+                break
+        headers.append(h)
+    out = []
+    for r in rows[first:]:
+        label_bits, parts = [], []
+        for j, v in enumerate(r):
+            if not v or v == "-":
+                continue
+            if j == 0 or (not headers[j] and not _is_num(v)):
+                label_bits.append(esc(v))
+            elif headers[j]:
+                parts.append(f"{esc(headers[j])} <b>{esc(v)}</b>")
+            else:
+                parts.append(f"<b>{esc(v)}</b>")
+        if parts:
+            out.append((f"<b>{' '.join(label_bits)}</b>: " if label_bits else "") + " · ".join(parts))
+    return out
+
+
+def generic_items(page):
+    text = page.extract_text() or ""
+    unit, lines, seen = "", [], set()
+    for raw in text.splitlines():
+        s = raw.strip()
+        if not s:
+            continue
+        m = re.fullmatch(r"\(\s*단위\s*:\s*([^)]+?)\s*\)", s)
+        if m:
+            unit = m.group(1)
+            continue
+        if is_boiler(s) or s in seen:
+            continue
+        seen.add(s)
+        s = " ".join(t for t in s.split() if t != "-")          # '없음' 표시(-)는 문장에서 생략
+        if s:
+            lines.append(s)
+    sents, tok = [], set()
+    for tb in page.extract_tables():
+        ss = table_to_sentences(tb)
+        if ss:
+            sents += ss
+            for r in tb:
+                for c in r:
+                    tok.update((c or "").split())
+    rest = [l for l in lines if not tok or any(t not in tok for t in l.split())]
+    return rest, sents, unit
+
+
+def story_generic(e):
+    rest, sents, unit = generic_items(e["page"])
+    st = page_header(e["title"], e["n"], f"단위: {unit}" if unit else "")
+    st.append(P("이 쪽은 전용 요약 양식이 없어 원문 내용을 문장으로 정리했습니다. "
+                "숫자는 원본 그대로이며, 그래프·도형은 글자로 읽히는 라벨·수치만 담았습니다.", "sub"))
+    if not rest and not sents:
+        st.append(Spacer(1, 6))
+        st.append(P("글자로 읽을 수 있는 내용이 없습니다 (이미지·그래프 쪽)."))
+        return st
+    if rest:
+        st.append(h2("내용"))
+        if len(rest) > 40:                                   # 줄이 너무 많으면 이어 붙여 촘촘하게
+            chunks = [" · ".join(esc(x) for x in rest[i:i + 6]) for i in range(0, len(rest), 6)]
+        else:
+            chunks = [esc(x) for x in rest]
+        for c in chunks:
+            st.append(Paragraph(c, S["gen"], bulletText="•"))
+    if sents:
+        st.append(h2("표 내용"))
+        for x in sents:
+            st.append(Paragraph(x, S["gen"], bulletText="•"))
+    return st
 
 
 # ----------------------------------------------------------------------------
@@ -478,27 +705,28 @@ def item_line(name, need, prep, short):
 # ----------------------------------------------------------------------------
 # 5. 쪽별 스토리
 # ----------------------------------------------------------------------------
-def story_cover(d):
-    cv, info = d["cover"], d["info"]
-    st = [Spacer(1, 38 * mm), P(f"{esc(cv['name'])} 고객님을 위한", "cover_sub"), P("보장분석 요약 보고서", "cover_title"),
+def story_cover(cv, basis, entries):
+    st = [Spacer(1, 26 * mm), P(f"{esc(cv['name'])} 고객님을 위한", "cover_sub"), P("보장분석 요약 보고서", "cover_title"),
           HRFlowable(width=70 * mm, thickness=3, color=NAVY, hAlign="LEFT"), Spacer(1, 6),
           P("원본 보장분석 보고서를 쪽별로 1:1 요약했습니다. 금액은 원본 표기 그대로이며 단위는 원본과 같습니다.", "sub"),
-          Spacer(1, 16 * mm),
-          P(f"<b>Financial Planner</b>  {esc(cv['fp'])}"),
-          P(f"소속  {esc(cv['branch'])}"),
-          P(f"H.P  {esc(cv['phone'])}"),
-          P(f"Email  {esc(cv['email'])}"),
-          Spacer(1, 12 * mm), h2("구성 (요약 쪽 = 원본 쪽)")]
-    for no, title in PAGE_TITLES.items():
-        st.append(bullet(f"{no}쪽  {title}"))
-    st += [Spacer(1, 10 * mm),
-           P(f"분석 기준일 {info['basis'] or cv['print_date']}  ·  출력일 {cv['print_date']}", "sub")]
+          Spacer(1, 12 * mm)]
+    for label, key, bold in (("Financial Planner", "fp", True), ("소속", "branch", False),
+                             ("H.P", "phone", False), ("Email", "email", False)):
+        if cv.get(key):
+            st.append(P((f"<b>{label}</b>" if bold else label) + f"  {esc(cv[key])}"))
+    st += [Spacer(1, 8 * mm), h2("구성 (요약 쪽 = 원본 쪽)")]
+    for e in entries:
+        if e["kind"] != "cover":
+            st.append(bullet(f"{e['n']}쪽  {esc(e['title'])}"))
+    st += [Spacer(1, 6 * mm),
+           P(f"분석 기준일 {basis or cv.get('print_date', '')}  ·  출력일 {cv.get('print_date', '')}", "sub")]
     return st
 
 
-def story_enrollment(d):
-    info, cs, cv = d["info"], d["contracts"], d["cover"]
-    st = page_header("보험 가입 현황", 2, f"{esc(cv['name'])}님 ({info['birth']}생) 현재 유지 중인 계약")
+def story_enrollment(d, src, name):
+    info, cs = d["info"], d["contracts"]
+    cv = {"name": name}
+    st = page_header("보험 가입 현황", src, f"{esc(cv['name'])}님 ({info['birth']}생) 현재 유지 중인 계약")
     st.append(kpi([("보험나이", f"{info['ins_age']}세"), ("상령일", info["age_date"]),
                    ("유지계약", f"{info['n_contracts']}건"), ("월보험료", f"{info['monthly']}원"),
                    ("기납입보험료", f"{info['paid_total']}원")]))
@@ -520,9 +748,9 @@ def story_enrollment(d):
     return st
 
 
-def story_generation(d):
-    cnt, members = d["gen_counts"], d["members"]
-    st = page_header("세대 분석", 3, "가족 구성원별 보장 준비 금액 (단위: 만원)")
+def story_generation(d, src):
+    cnt, members = d["counts"], d["members"]
+    st = page_header("세대 분석", src, "가족 구성원별 보장 준비 금액 (단위: 만원)")
     if cnt:
         st.append(P(f"유지계약 <b>{cnt['total']}건</b> — 교보생명 {cnt['kyobo']}건 · 생명보험 {cnt['life']}건 · "
                     f"손해보험 {cnt['nonlife']}건 · 공제/우체국 {cnt['mutual']}건"))
@@ -533,14 +761,14 @@ def story_generation(d):
     return st
 
 
-def story_products(d, part, src, labels, groups):
+def story_products(d, src, title, labels, groups):
     n = len(labels)
     need, prep, short = d["need"], d["prep"], d["short"]
     stat = [status_of(prep[i], short[i]) for i in range(n)]
     cnt = {k: stat.count(k) for k in ("적정", "부족", "미보장")}
-    sub = f"필요자금 대비 급부별 분석 ({part}) · 단위: 만원"
-    st = page_header(f"상품별 분석 ({part})", src, sub)
-    if part == "1/2" and d["head"]:
+    sub = "필요자금 대비 급부별 분석 · 단위: 만원"
+    st = page_header(title, src, sub)
+    if d["head"]:
         h = d["head"]
         st.append(kpi([("분석항목(전체)", f"{h['total']}개"), ("적정보장", f"{h['ok']}개", C_OK),
                        ("부족보장", f"{h['low']}개", C_LOW), ("미보장", f"{h['none']}개", C_NONE)]))
@@ -568,9 +796,9 @@ def story_products(d, part, src, labels, groups):
     return st
 
 
-def story_body(d):
+def story_body(d, src):
     body = d["body"]
-    st = page_header("신체부위별 보장현황", 6, "원본 범례 색 기준 충분/부족/미보장 · 단위: 만원")
+    st = page_header("신체부위별 보장현황", src, "원본 범례 색 기준 충분/부족/미보장 · 단위: 만원")
     cnt = {"충분": 0, "부족": 0, "미보장": 0}
     for _, st_ in body.values():
         cnt[st_] += 1
@@ -627,52 +855,82 @@ def draw_footer(canvas, doc):
     canvas.setFont(FONT, 7.5)
     canvas.setFillColor(GRAY)
     canvas.drawString(MARGIN_X, 10 * mm, doc.footer_left)
-    canvas.drawRightString(PAGE_W - MARGIN_X, 10 * mm, f"{canvas.getPageNumber()} / {EXPECTED_PAGES}")
+    canvas.drawRightString(PAGE_W - MARGIN_X, 10 * mm, f"{canvas.getPageNumber()} / {doc.total_pages}")
     canvas.restoreState()
 
 
-def build_pdf(data, out_path):
+def make_story(e, ctx):
+    k, n, d = e["kind"], e["n"], e["data"]
+    if e["mode"] != "전용":
+        return story_generic(e)
+    if k == "cover":
+        return story_cover(d, ctx["basis"], ctx["entries"])
+    if k == "enrollment":
+        return story_enrollment(d, n, ctx["name"])
+    if k == "generation":
+        return story_generation(d, n)
+    if k == "products":
+        return story_products(d["d"], n, e["title"], d["labels"], d["groups"])
+    if k == "body":
+        return story_body(d, n)
+    if k == "ages":
+        return story_ages(e["title"], n, d["rows"], d["labels"], d["groups"])
+    return story_generic(e)
+
+
+def natural_height(flowables):
+    h = 0
+    for f in flowables:
+        h += f.wrap(CW, 10 ** 6)[1] + f.getSpaceBefore() + f.getSpaceAfter()
+    return h
+
+
+def build_pdf(entries, ctx, out_path):
     build_styles()
-    cv, info = data["cover"], data["info"]
-    pages = [
-        story_cover(data),
-        story_enrollment(data),
-        story_generation(data),
-        story_products(data["prod1"], "1/2", 4, LABELS_A, GROUPS_A),
-        story_products(data["prod2"], "2/2", 5, LABELS_B, GROUPS_B),
-        story_body(data),
-        story_ages("연령별 분석 (1/2)", 7, data["ages1"], LABELS_A, GROUPS_A),
-        story_ages("연령별 분석 (2/2)", 8, data["ages2"], LABELS_B, GROUPS_B),
-    ]
-    doc = BaseDocTemplate(str(out_path), pagesize=A4, title=f"{cv['name']} 보장분석 요약 보고서",
-                          author=cv["fp"], leftMargin=MARGIN_X, rightMargin=MARGIN_X)
-    doc.footer_left = (f"{cv['name']} 고객님 보장분석 요약 · {info['basis'] or cv['print_date']} 기준 · "
+    ctx["entries"] = entries
+    cv = ctx["cover"]
+    stories = [make_story(e, ctx) for e in entries]
+    for e, st in zip(entries, stories):
+        h = natural_height(st)
+        if h > FH * 1.5:
+            print(f"[주의] 원본 p.{e['n']}: 내용이 많아 약 {int(FH / h * 100)}% 크기로 축소됩니다.")
+    name = ctx["name"]
+    doc = BaseDocTemplate(str(out_path), pagesize=A4, title=f"{name} 보장분석 요약 보고서",
+                          author=cv.get("fp", ""), leftMargin=MARGIN_X, rightMargin=MARGIN_X)
+    doc.total_pages = len(entries)
+    doc.footer_left = (f"{name} 고객님 보장분석 요약 · {ctx['basis'] or cv.get('print_date', '')} 기준 · "
                        "보험금 지급 근거가 아니며 약관·증권이 우선합니다")
     frame = Frame(MARGIN_X, FRAME_BOTTOM, CW, FH, leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
     doc.addPageTemplates([PageTemplate(id="main", frames=[frame], onPage=draw_footer)])
     story = []
-    for i, p in enumerate(pages):
-        story.append(KeepInFrame(CW, FH, p, mode="shrink"))      # 넘치면 축소해서 한 쪽에 맞춤
-        if i < len(pages) - 1:
+    for i, st in enumerate(stories):
+        story.append(KeepInFrame(CW, FH, st, mode="shrink"))      # 넘치면 축소해서 한 쪽에 맞춤
+        if i < len(stories) - 1:
             story.append(PageBreak())
     doc.build(story)
 
 
 def main():
-    if len(sys.argv) < 2:
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    force_generic = "--generic" in sys.argv
+    if not args:
         print(__doc__)
         sys.exit(1)
-    src = Path(sys.argv[1])
-    out = Path(sys.argv[2]) if len(sys.argv) > 2 else src.with_name(src.stem + "_요약.pdf")
+    src = Path(args[0])
+    out = Path(args[1]) if len(args) > 1 else src.with_name(src.stem + "_요약.pdf")
     register_fonts()
     with pdfplumber.open(str(src)) as pdf:
-        data = parse_report(pdf)
-    build_pdf(data, out)
+        n_src = len(pdf.pages)
+        entries, ctx = analyze_pdf(pdf, force_generic)
+        print(f"[원본] {n_src}쪽 — 쪽별 처리")
+        for e in entries:
+            print(f"  p.{e['n']:>2}  {e['title']}  [{e['mode']}]" + (f"  ※ {e['note']}" if e["note"] else ""))
+        build_pdf(entries, ctx, out)
     try:
         from pypdf import PdfReader
         n = len(PdfReader(str(out)).pages)
-        print(f"[완료] {out}  ({n}쪽 / 원본 {EXPECTED_PAGES}쪽)")
-        if n != EXPECTED_PAGES:
+        print(f"[완료] {out}  (요약 {n}쪽 / 원본 {n_src}쪽)")
+        if n != n_src:
             print("[경고] 쪽수가 원본과 다릅니다. 내용이 한 쪽을 넘쳤는지 확인하세요.")
     except ImportError:
         print(f"[완료] {out}")
