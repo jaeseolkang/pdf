@@ -1,4 +1,4 @@
-# 2026-11-15 08:45 KST | 수정: 신체부위별 보장현황 그림을 코드에 내장(항상 같은 그림), 신체 부위와 항목을 원본처럼 점선으로 연결
+# 2026-11-15 08:43 KST | 수정: 결과물은 항상 16:9(가로 297mm×세로 167mm)로 출력 — 모든 쪽을 16:9 가로 쪽으로 통일 (APP_VERSION 1.1)
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -34,7 +34,7 @@
   원본 p.26 보장밸런스(그래프) 전/후 비교 → 요약 p.26
 
 쪽 종류별 처리
-  (범용 요약 쪽은 16:9 가로 쪽, 전용 요약 쪽은 A4 세로 쪽. 신체부위별 보장현황은 내장 그림으로 원본 모양 그대로 표시)
+  (모든 쪽은 16:9 가로 쪽 — 전용 요약 쪽도 A4 세로가 아니라 16:9. 신체부위별 보장현황은 내장 그림으로 원본 모양 그대로 표시)
   전용 요약: 표지, 보험 가입 현황, 세대 분석, 상품별 분석, 신체부위별 보장현황, 연령별 분석
   범용 요약: 그 밖의 모든 쪽(Pride of KYOBO, 종합요약, 보장밸런스, 보장항목별 분석, 보장 제안,
              전/후 비교 등). 원문 글자는 항목으로, 표는 표로 옮기며, 숫자는 원본 그대로 옮긴다.
@@ -50,6 +50,7 @@
   2) 원본의 표는 표로 옮긴다. 반복 열·안내 문구·빈 행·빈 열은 뺀다. 문장은 개조식 문어체로 쓰고 구어체는 쓰지 않는다.
   3) 계약자·주피·종피 반복, 안내 문구 3줄 등 중요하지 않은 내용은 뺀다.
   4) 원본 N쪽 = 요약 N쪽 (쪽 수가 바뀌어도 항상 1:1). 내용이 넘치면 글자 크기를 줄여서라도 한 쪽에 맞춘다.
+  5) 결과물은 항상 16:9 비율(가로 297mm × 세로 167mm)로 만든다. 전용·범용 구분 없이 모든 쪽에 적용한다.
 
 설치
   pip install pdfplumber reportlab pypdf
@@ -98,6 +99,8 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Image, KeepInFrame,
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
+
+APP_VERSION = "1.1"        # 이 파일을 수정할 때마다 올린다
 
 # ----------------------------------------------------------------------------
 # 0. 내장 이미지 (교보생명 로고 · 펭귄 가족) — 원본 PNG 파일을 base64 로 그대로 담았다.
@@ -4446,6 +4449,9 @@ W_BOTTOM = 16 * mm
 W_TOP = 9 * mm
 WFH = WIDE_H - W_BOTTOM - W_TOP - 2
 
+# 결과물은 항상 16:9 — 전용 요약 쪽도 같은 가로 쪽 크기를 쓰도록 본문 폭·높이를 16:9 기준으로 맞춘다.
+CW, FH = WCW, WFH
+
 S = {}
 GLYPHS = None          # 기본 TTF 글꼴이 가진 글자 코드 집합 (None이면 대체 처리 안 함)
 FALLBACKS = []         # [(글꼴이름, 글자집합)] 기본 글꼴에 없는 글자(한자·로마숫자 등)용 대체 글꼴
@@ -7870,7 +7876,11 @@ def story_body(d, src):
     body = d["body"]
     if all(lab in body for lab in BODY_BASE):                # 원본 모양 그대로 (내장 그림)
         try:
-            return page_header("신체부위별 보장현황", src) + [BodyMap(body, CW)]
+            hdr = page_header("신체부위별 보장현황", src)
+            avail_h = FH - natural_height(hdr, CW) - 4 * mm           # 16:9 쪽 높이에 맞춰 그림 크기를 정한다
+            bm = BodyMap(body, min(CW, avail_h * BODY_PIC_W / BODY_PIC_H))
+            bm.hAlign = "CENTER"
+            return hdr + [bm]
         except Exception as ex:                              # 그림을 읽지 못하면 표로 대체
             print(f"[주의] 내장 그림을 불러오지 못해 표로 대체합니다: {ex}")
     st = page_header("신체부위별 보장현황", src, "단위: 만원")
@@ -7951,8 +7961,8 @@ def natural_height(flowables, width=None):
 
 
 def is_wide(e):
-    """범용 요약 쪽(전용 양식이 없거나 읽기에 실패한 쪽)은 16:9 가로 쪽으로 만든다."""
-    return e["mode"] != "전용"
+    """모든 쪽(전용·범용)을 16:9 가로 쪽으로 만든다."""
+    return True                                   # 결과물은 항상 16:9
 
 
 def build_pdf(entries, ctx, out_path):
@@ -7967,7 +7977,7 @@ def build_pdf(entries, ctx, out_path):
         if h > fh * 1.5:
             print(f"[주의] 원본 p.{e['n']}: 내용이 많아 약 {int(fh / h * 100)}% 크기로 축소됩니다.")
     name = ctx["name"]
-    doc = BaseDocTemplate(str(out_path), pagesize=A4, title=f"{name} 보장분석 요약 보고서",
+    doc = BaseDocTemplate(str(out_path), pagesize=(WIDE_W, WIDE_H), title=f"{name} 보장분석 요약 보고서",
                           author=cv.get("fp", ""), leftMargin=MARGIN_X, rightMargin=MARGIN_X)
     doc.total_pages = len(entries)
     doc.footer_left = (f"{name} 고객님 보장분석 요약 · {ctx['basis'] or cv.get('print_date', '')} 기준 · "
@@ -7998,6 +8008,7 @@ def build_pdf(entries, ctx, out_path):
 def convert(src, out, force_generic=False):
     """PDF 한 개를 요약 PDF로 변환한다. 진행 내용은 print 로 알린다. -> (요약 쪽수, 원본 쪽수)"""
     register_fonts()
+    print(f"[버전] {APP_VERSION}  (출력: 16:9)")
     with pdfplumber.open(str(src)) as pdf:
         n_src = len(pdf.pages)
         entries, ctx = analyze_pdf(pdf, force_generic)
@@ -8056,7 +8067,7 @@ class App:
         self.gen_var = tk.BooleanVar(value=False)
         self.status_var = tk.StringVar(value="PDF를 선택하세요.")
 
-        root.title("보장분석 요약 PDF 만들기")
+        root.title(f"보장분석 요약 PDF 만들기 v{APP_VERSION}")
         root.geometry("760x540")
         root.minsize(640, 460)
         frm = ttk.Frame(root, padding=14)
