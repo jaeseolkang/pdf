@@ -1,4 +1,4 @@
-# 2026-11-15 08:43 KST | 수정: 결과물은 항상 16:9(가로 297mm×세로 167mm)로 출력 — 모든 쪽을 16:9 가로 쪽으로 통일 (APP_VERSION 1.1)
+# 2026-11-15 08:47 KST | 수정: 모든 쪽 헤더에 고객 이름 표시, 첫 쪽(표지)의 '쪽/구성' 목차 표 삭제 (APP_VERSION 1.2) | 이전: 결과물은 항상 16:9
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -100,7 +100,7 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.1"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.2"        # 이 파일을 수정할 때마다 올린다
 
 # ----------------------------------------------------------------------------
 # 0. 내장 이미지 (교보생명 로고 · 펭귄 가족) — 원본 PNG 파일을 base64 로 그대로 담았다.
@@ -4973,9 +4973,13 @@ def h2(text):
     return Paragraph(text, S["h2"])
 
 
+CUSTOMER_NAME = ""          # 모든 쪽 헤더에 넣을 고객 이름 (build_pdf 가 채운다)
+
+
 def page_header(title, src, sub="", width=None):
-    t = Table([[Paragraph(title, S["title"]), Paragraph(f"원본 p.{src}", S["tag"])]],
-              colWidths=[(width or CW) - 30 * mm, 30 * mm])
+    tag = f"{esc(CUSTOMER_NAME)} 고객님 · 원본 p.{src}" if CUSTOMER_NAME else f"원본 p.{src}"
+    t = Table([[Paragraph(title, S["title"]), Paragraph(tag, S["tag"])]],
+              colWidths=[(width or CW) - 80 * mm, 80 * mm])
     t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), NAVY), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                            ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
                            ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
@@ -7772,14 +7776,6 @@ def story_cover(cv, basis, entries):
         t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 0.3, LINE), ("TOPPADDING", (0, 0), (-1, -1), 3),
                                ("BOTTOMPADDING", (0, 0), (-1, -1), 3), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
         st += [t, Spacer(1, 8 * mm)]
-    items = [e for e in entries if e["kind"] != "cover"]
-    half = (len(items) + 1) // 2
-    rows = []
-    for i in range(half):
-        l = items[i]
-        r = items[half + i] if half + i < len(items) else None
-        rows.append([str(l["n"]), esc(l["title"]), str(r["n"]) if r else "", esc(r["title"]) if r else ""])
-    st.append(data_table(["쪽", "구성", "쪽", "구성"], rows, fit([9, 79, 9, 79]), aligns=[1, 0, 1, 0], size=8))
     st += [Spacer(1, 5 * mm), P(f"분석 기준일 {basis or cv.get('print_date', '')} · 출력일 {cv.get('print_date', '')}", "sub")]
     return st
 
@@ -7966,7 +7962,9 @@ def is_wide(e):
 
 
 def build_pdf(entries, ctx, out_path):
+    global CUSTOMER_NAME
     build_styles()
+    CUSTOMER_NAME = ctx.get("name", "")
     ctx["entries"] = entries
     cv = ctx["cover"]
     stories = [make_story(e, ctx) for e in entries]
