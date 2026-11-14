@@ -1,4 +1,4 @@
-# 2026-11-15 08:47 KST | 수정: 모든 쪽 헤더에 고객 이름 표시, 첫 쪽(표지)의 '쪽/구성' 목차 표 삭제 (APP_VERSION 1.2) | 이전: 결과물은 항상 16:9
+# 2026-11-15 08:50 KST | 수정: 첫 쪽은 원본 표지 쪽을 그림으로 떠서 원본 그대로 표시 (APP_VERSION 1.3) | 이전: 헤더에 고객 이름, 표지 목차 표 삭제, 결과물 16:9
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -42,7 +42,8 @@
 
 첫 쪽 이미지
   교보생명 로고와 펭귄 이미지는 이 파일 안에 base64 로 들어 있어 별도 이미지 파일이 필요 없다.
-  요약 PDF 첫 쪽에는 항상 들어가며(표지를 못 읽은 경우·--generic 포함), 크기는 LOGO_WIDTH_MM / PENGUIN_WIDTH_MM 으로 조절한다.
+  첫 쪽은 원본 1쪽을 그림으로 떠서 비율 그대로(왜곡·자르기 없이) 16:9 쪽 가운데에 넣는다. 원본 표지에 로고·펭귄이 이미 있으므로 따로 넣지 않는다.
+  원본 1쪽을 그림으로 뜰 수 없으면 예전 방식(내장 로고·펭귄 + 표지 요약)으로 대체하며, 이때 크기는 LOGO_WIDTH_MM / PENGUIN_WIDTH_MM 으로 조절한다.
   이미지는 내용이 많아도 축소되지 않고, 그 아래 내용만 한 쪽에 맞게 줄어든다.
 
 원칙
@@ -100,7 +101,7 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.2"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.3"        # 이 파일을 수정할 때마다 올린다
 
 # ----------------------------------------------------------------------------
 # 0. 내장 이미지 (교보생명 로고 · 펭귄 가족) — 원본 PNG 파일을 base64 로 그대로 담았다.
@@ -7930,8 +7931,29 @@ def draw_footer(canvas, doc):
     canvas.restoreState()
 
 
+def story_original_page(e):
+    """원본 쪽을 그림으로 떠서 비율 그대로 16:9 쪽 본문에 맞춰 넣는다. 실패하면 None."""
+    try:
+        pil = e["page"].to_image(resolution=200).original.convert("RGB")
+        buf = io.BytesIO()
+        pil.save(buf, "PNG")
+        w, h = pil.size
+        k = min(CW / w, (FH - 2) / h)
+        img = Image(io.BytesIO(buf.getvalue()), width=w * k, height=h * k)
+        img.hAlign = "CENTER"
+        e["orig_img"] = True
+        return [img]
+    except Exception as ex:
+        print(f"[주의] 원본 1쪽을 그림으로 만들지 못해 요약 표지로 대체합니다: {ex}")
+        return None
+
+
 def make_story(e, ctx):
     k, n, d = e["kind"], e["n"], e["data"]
+    if n == 1:                                                  # 첫 쪽은 원본 그대로
+        st = story_original_page(e)
+        if st:
+            return st
     if e["mode"] != "전용":
         return story_generic(e)
     if k == "cover":
@@ -7990,7 +8012,7 @@ def build_pdf(entries, ctx, out_path):
     story = []
     for i, st in enumerate(stories):
         cw, fh = (WCW, WFH) if wides[i] else (CW, FH)
-        if i == 0:
+        if i == 0 and not entries[0].get("orig_img"):
             brand = brand_header(cw)                       # 첫 쪽에는 항상 로고·펭귄을 넣고, 이 부분은 축소하지 않는다
             brand_h = natural_height(brand, cw) if brand else 0
             story.extend(brand)
