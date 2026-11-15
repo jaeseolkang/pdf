@@ -1,4 +1,4 @@
-# 2026-11-15 10:40 KST | 수정: 첫 쪽(표지)을 16:9 쪽 전체에 여백 없이 새로 설계(제목·FP·로고·펭귄·띠·안내문), 로고 화질 4배·펭귄 가장자리 보정 (APP_VERSION 1.9) | 이전: pypdf 오류 수정(1.8)
+# 2026-11-15 11:05 KST | 수정: 표지 담당 FP 이름 읽기 보강(3단계)·담당 FP 영역을 원본처럼 작게 (APP_VERSION 1.10) | 이전: 표지 16:9 전체 채움(1.9)
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -105,7 +105,7 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.9"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.10"        # 이 파일을 수정할 때마다 올린다
 
 # ----------------------------------------------------------------------------
 # 0. 내장 이미지 — 업로드한 원본 파일 4개를 base64 PNG 로 이 파일 안에 담았다. (별도 이미지 파일 불필요)
@@ -5448,6 +5448,38 @@ MEMBER_RE = re.compile(r"^(\S+)\s*\((\d+)\)\s+(" + NUM_TOKENS + r")$")
 AGE_RE = re.compile(r"^(\d+세|종신)\s+(" + NUM_TOKENS + r")$")
 
 
+_FP_BAD = ("소속", "H.P", "Email", "Financial", "Planner", "출력")
+
+
+def _fp_name(page, t):
+    """담당 FP 이름을 읽는다. 1) 글줄에서 'Financial Planner' 뒤 낱말 2) 같은 줄의 오른쪽 낱말(위치) 3) '소속' 줄 바로 위의 한글 이름."""
+    m = re.search(r"Financial\s*Planner\s*[:：]?\s*([^\s:：]+)", t)
+    if m and not m.group(1).startswith(_FP_BAD):
+        return m.group(1).strip()
+    try:
+        words = page.extract_words(x_tolerance=1.5, y_tolerance=3)
+    except Exception:
+        return ""
+    ref = next((w for w in words if "Planner" in w["text"]), None)
+    if ref:
+        g = re.search(r"Planner[:：]?(.+)$", ref["text"])
+        if g and not g.group(1).startswith(_FP_BAD):
+            return g.group(1).strip()
+        cy = (ref["top"] + ref["bottom"]) / 2
+        tol = max(6, (ref["bottom"] - ref["top"]) * 0.8)
+        cand = sorted((w for w in words if w is not ref and abs((w["top"] + w["bottom"]) / 2 - cy) < tol
+                       and w["x0"] >= ref["x1"] - 1 and not w["text"].startswith(_FP_BAD)), key=lambda w: w["x0"])
+        if cand:
+            return cand[0]["text"].strip()
+    sok = next((w for w in words if w["text"].startswith("소속")), None)
+    if sok:
+        up = [w for w in words if re.fullmatch(r"[가-힣]{2,4}", w["text"]) and w["bottom"] <= sok["top"] + 2
+              and sok["top"] - w["bottom"] < 45 and not w["text"].startswith(_FP_BAD) and w["text"] != "고객님"]
+        if up:
+            return max(up, key=lambda w: (w["bottom"], w["x0"]))["text"]
+    return ""
+
+
 def parse_cover(page):
     t = page.extract_text() or ""
 
@@ -5455,9 +5487,12 @@ def parse_cover(page):
         m = re.search(pat, t)
         return m.group(1).strip() if m else ""
 
-    return dict(name=g(r"(\S+)\s*고객님을 위한"), fp=g(r"Financial Planner\s*(\S+)"),
-                branch=g(r"소속:\s*(.+)"), phone=g(r"H\.P:\s*(\S+)"), email=g(r"Email:\s*(\S+)"),
-                print_date=g(r"출력\s*\|\s*([\d-]+)"))
+    cv = dict(name=g(r"(\S+)\s*고객님\s*을\s*위한"), fp=_fp_name(page, t),
+              branch=g(r"소속:\s*(.+)"), phone=g(r"H\.P:\s*(\S+)"), email=g(r"Email:\s*(\S+)"),
+              print_date=g(r"출력\s*\|\s*([\d-]+)"))
+    if not cv["fp"]:
+        print("[주의] 표지에서 담당 FP 이름을 읽지 못했습니다.")
+    return cv
 
 
 def parse_enrollment(page):
@@ -8729,19 +8764,18 @@ class CoverPage(Flowable):
         for x0, x1, col in ((150, 400, COVER_NAVY), (400, 462, self.GREEN), (462, 760, colors.HexColor("#CDD4DD"))):
             c.setFillColor(col)
             c.rect(X(x0), Y(458), (x1 - x0) * K, 9 * K, fill=1, stroke=0)
-        # 3) 담당 FP
+        # 3) 담당 FP — 원본처럼 작게: 'Financial Planner 이름' 한 줄 + '소속: / H.P: / Email:' 줄
         c.setStrokeColor(colors.HexColor("#D5DBE3"))
         c.setLineWidth(1.2 * K)
-        c.line(X(150), Y(566), X(560), Y(566))
+        c.line(X(150), Y(570), X(480), Y(570))
         if cv.get("fp"):
-            x = self._text(150, 618, "Financial Planner", 17, COVER_BLUE, bold=True, track=0.6)
-            self._text(x + 16, 618, cv["fp"], 30, ink, bold=True)
-        y = 676
-        for lab, key in (("소속", "branch"), ("H.P", "phone"), ("Email", "email")):
+            x = self._text(150, 616, "Financial Planner", 14, COVER_BLUE, bold=True, track=0.4)
+            self._text(x + 10, 616, cv["fp"], 22, ink)
+        y = 656
+        for lab, key in (("소속: ", "branch"), ("H.P: ", "phone"), ("Email: ", "email")):
             if cv.get(key):
-                self._text(150, y, lab, 16, mute, bold=True, track=0.5)
-                self._text(262, y, cv[key], 21, ink)
-                y += 46
+                self._text(150, y, lab + cv[key], 15.5, colors.HexColor("#2B3340"))
+                y += 31
         # 4) 오른쪽 위 로고
         self._image("brand_logo", 1270, 64, w=235)
         # 5) 오른쪽 남색 세로 띠 + 세로 글자 (맨 오른쪽, 왼쪽 아래만 둥글게)
