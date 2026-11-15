@@ -1,4 +1,4 @@
-# 2026-11-15 09:40 KST | 수정: 모든 쪽 16:9 고정(A4 양식 제거 + 완성 후 쪽 비율 검사), 대화·수정 내용을 md 에 항상 기록하는 규칙 추가 (APP_VERSION 1.7) | 이전: 내장 이미지 4종 교체(1.6)
+# 2026-11-15 10:05 KST | 수정: 16:9 검사가 pypdf 없이 동작하도록 pdfplumber 로 변경('No module named pypdf' 오류 해결) (APP_VERSION 1.8) | 이전: 16:9 고정·md 기록 규칙(1.7)
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -58,7 +58,7 @@
      PDF 를 다 만든 뒤 모든 쪽이 16:9 인지 자동으로 검사한다. (verify_16x9)
 
 설치
-  pip install pdfplumber reportlab pypdf
+  pip install pdfplumber reportlab
 
 사용
   1) 창으로 쓰기   : python gaejang_summary_report_v3.py
@@ -105,7 +105,7 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.7"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.8"        # 이 파일을 수정할 때마다 올린다
 
 # ----------------------------------------------------------------------------
 # 0. 내장 이미지 — 업로드한 원본 파일 4개를 base64 PNG 로 이 파일 안에 담았다. (별도 이미지 파일 불필요)
@@ -7549,13 +7549,13 @@ def is_wide(e):
 
 
 def verify_16x9(pdf_path, tol=0.004):
-    """완성한 PDF 의 모든 쪽이 16:9 인지 검사한다. 하나라도 다르면 오류를 낸다."""
-    from pypdf import PdfReader
+    """완성한 PDF 의 모든 쪽이 16:9 인지 검사한다. 하나라도 다르면 오류를 낸다. (추가 설치 없이 pdfplumber 사용)"""
     bad = []
-    for i, pg in enumerate(PdfReader(str(pdf_path)).pages, 1):
-        w, h = float(pg.mediabox.width), float(pg.mediabox.height)
-        if abs(w / h - 16 / 9) > 16 / 9 * tol:
-            bad.append(f"p.{i}({w:.0f}x{h:.0f})")
+    with pdfplumber.open(str(pdf_path)) as pdf:
+        for i, pg in enumerate(pdf.pages, 1):
+            w, h = float(pg.width), float(pg.height)
+            if abs(w / h - 16 / 9) > 16 / 9 * tol:
+                bad.append(f"p.{i}({w:.0f}x{h:.0f})")
     if bad:
         raise RuntimeError("16:9 가 아닌 쪽이 있습니다: " + ", ".join(bad))
     print("[검사] 모든 쪽 16:9 확인")
@@ -7640,12 +7640,12 @@ def convert(src, out, force_generic=False):
         build_pdf(entries, ctx, out)
     n_out = None
     try:
-        from pypdf import PdfReader
-        n_out = len(PdfReader(str(out)).pages)
+        with pdfplumber.open(str(out)) as po:
+            n_out = len(po.pages)
         print(f"[완료] {out}  (요약 {n_out}쪽 / 원본 {n_src}쪽)")
         if n_out != n_src:
             print("[경고] 쪽수가 원본과 다릅니다. 내용이 한 쪽을 넘쳤는지 확인하세요.")
-    except ImportError:
+    except Exception:
         print(f"[완료] {out}")
     return n_out, n_src
 
