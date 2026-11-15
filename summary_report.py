@@ -1,7 +1,10 @@
-# 2026-11-15 22:00 KST | 수정: 표로 표현할 수 있는 쪽(세대 분석·상품별 분석·연령별 분석·표가 있는 범용 쪽)을 보험 가입 현황과 같은 형식(작은 제목·큰 제목 문장·설명·카드·목록 표)으로 통일 (APP_VERSION 1.17) | 이전: 스퀘어 엠블럼 새 디자인(1.16)
+# 2026-11-16 08:10 KST | 수정: 분석 쪽의 색감·분위기를 요약 1~3쪽에 맞춤(흰 바탕·표지 남색/초록 팔레트·흰 카드·같은 꼬리말·tall) (APP_VERSION 1.22) | 이전: 세대 분석을 분석 쪽으로 대체(1.21)
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
+목표: 원본 보장분석 보고서 PDF 는 글자·표(텍스트) 위주라 발표하기 어렵다. 이것을 가독성이 좋은 16:9 발표용 PDF 로 다시 만든다.
+      (쪽별 요약 + 분석 슬라이드. 숫자는 원본 그대로, 결과는 원본과 다시 대조한다.)
+
 교보생명 '보장분석 보고서' PDF를 읽어서, 같은 쪽수·같은 순서의 요약 PDF를 만든다.
 아래 목록은 '전체 양식(26쪽)'의 기준 구성이다. 실제 PDF는 이보다 쪽이 줄거나 늘어도 되며,
 쪽 번호가 아니라 쪽 제목을 보고 종류를 판별해 원본 p.N → 요약 p.N 으로 1:1 대응시킨다.
@@ -32,6 +35,10 @@
   원본 p.24 보장 제안 전/후 비교 6/6 → 요약 p.24
   원본 p.25 신체부위별 보장현황 전/후 비교 → 요약 p.25
   원본 p.26 보장밸런스(그래프) 전/후 비교 → 요약 p.26
+
+분석 쪽 대체 규칙 (1.20~)
+  분석 슬라이드가 다루는 원본 쪽(상품별 분석, 연령별 분석)은 요약 쪽을 만들지 않고 분석 쪽이 대신한다(내용 중복 방지).
+  그래서 요약 쪽 수 = 원본 쪽 수 - 대체한 쪽 수 이고, 분석 쪽은 요약 쪽 맨 뒤에 붙는다. 대체할 종류는 ANALYSIS_REPLACES.
 
 쪽 종류별 처리
   (모든 쪽은 16:9 가로 쪽 — 전용 요약 쪽도 A4 세로가 아니라 16:9. 신체부위별 보장현황은 선을 지운 내장 바탕 그림 위에 연결선·점·구분선을 코드로 직접 그려 원본 모양대로 표시)
@@ -73,6 +80,12 @@
       표지와 똑같은 모양·크기로 모든 쪽 오른쪽 끝에 넣는다. (draw_tall, 끄려면 TALL_SHOW_ON_PAGES = False)
   14) [동일 작업] 이 파일을 고칠 때 이미 정해진 양식·이미지 처리 값(보험 가입 현황 양식, 스퀘어 엠블럼, tall, 신체부위별 선)은
       md 「3·3-2·3-3·3-4·5」 의 규칙·고정값과 같게 유지한다. 새로 정한 것은 md 에 규칙으로 먼저 적고, 코드의 상수를 그 값에 맞춘다.
+  16) [분석 쪽] 요약 PDF 의 맨 끝, 원본 쪽 수 뒤에 분석 슬라이드를 이어 붙인다(원본 3~8쪽 숫자 분석, 16:9 최대 9장). 항목을 적정/부족/미보장으로 분류하고
+      개수·준비율·순위를 계산해 '한 문장 결론 + 설명 + 카드/표/그림'으로 정리한다. 계산한 값은 고정한 식으로만 만들고(md 3-6), 원본에서 그대로
+      인용한 값은 결과 PDF 에서 다시 대조한다. 앞쪽 '원본 N쪽 = 요약 N쪽' 대응은 그대로이고 분석 쪽은 그 뒤에 붙는다. 쪽 번호는 요약+분석 전체 기준이다.
+      따로 파일로도 받으려면 --separate-analysis. (analysis_slides, build_pdf, draw_analysis_page)
+      분석 쪽이 다루는 원본 쪽(상품별·연령별·세대 분석)의 요약 쪽은 만들지 않고 분석 쪽으로 대체한다(ANALYSIS_REPLACES, replaced_by_analysis). 내용 중복 방지.
+      세대 분석은 구성원이 1명이고 그 값이 상품별 분석의 '준비' 값과 모두 같을 때만 대체한다(_generation_covered). 구성원이 여럿이면 요약 쪽을 남긴다.
   15) [표 쪽 공통 양식] 표로 표현할 수 있는 데이터(세대 분석, 상품별 분석, 연령별 분석, 표가 있는 범용 쪽)는 항상 보험 가입 현황과 같은 형식으로 만든다.
       작은 제목(+고객명·원본 쪽) → 큰 제목 문장 → 한 줄 설명 → 카드 2~3개 → 목록 표(머리줄 아래 굵은 회색 선, 행 사이 옅은 선, 숫자 오른쪽 정렬). (table_page, list_table)
       표 열이 TP_EMBLEM_MAX_COLS 이하면 본문 2/3 + 스퀘어 엠블럼 1/3, 더 넓으면 쪽 전체 폭. 긴 표(세대 분석)는 같은 높이의 좌우 두 표로 나눈다.
@@ -89,6 +102,9 @@
   2) 명령줄로 쓰기 : python gaejang_summary_report_v3.py 고순종.pdf
                      python gaejang_summary_report_v3.py 고순종.pdf 고순종_요약.pdf
                      python gaejang_summary_report_v3.py 고순종.pdf --generic   (모든 쪽을 범용 요약으로 — 점검용)
+                     python gaejang_summary_report_v3.py 고순종.pdf --no-analysis   (분석 쪽을 넣지 않음)
+                     python gaejang_summary_report_v3.py 고순종.pdf --separate-analysis   (분석 쪽을 별도 PDF 로도 저장)
+     분석 쪽: 요약 PDF 맨 끝에 함께 들어간다. 따로 '<원본이름>_분석.pdf' 도 받으려면 --separate-analysis.
 
 한글 글꼴
   Windows는 '맑은 고딕'(malgun.ttf)을 자동 사용한다. 다른 환경에서는 스크립트와 같은 폴더의
@@ -126,7 +142,7 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.17"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.22"        # 이 파일을 수정할 때마다 올린다
 
 # ----------------------------------------------------------------------------
 # 0. 내장 이미지 — 업로드한 원본 파일 4개를 base64 PNG 로 이 파일 안에 담았다. (별도 이미지 파일 불필요)
@@ -18632,8 +18648,8 @@ class CoverPage(Flowable):
         t.setFillColor(color)
         if track:
             t.setCharSpace(track * K)
+        t.setTextRenderMode(2 if fake_bold else 0)          # 글자 그리기 방식은 다음 글자에도 이어지므로 매번 정한다
         if fake_bold:
-            t.setTextRenderMode(2)
             c.setStrokeColor(color)
             c.setLineWidth(sz * 0.022)
         t.textOut(text)
@@ -19323,7 +19339,7 @@ def verify_table_values(pdf_path, entries):
     with pdfplumber.open(str(pdf_path)) as pdf:
         for e in targets:
             want = Counter(_expected_table_numbers(e))
-            have = Counter((pdf.pages[e["n"] - 1].extract_text() or "").split())
+            have = Counter((_opage(pdf, e).extract_text() or "").split())
             miss = {k: v - have.get(k, 0) for k, v in want.items() if have.get(k, 0) < v}
             if miss:
                 raise RuntimeError(f"원본 p.{e['n']} {e['title']} 표 검사 실패: 빠진 값 {miss}")
@@ -19460,11 +19476,11 @@ def verify_enrollment_values(pdf_path, entries):
     with pdfplumber.open(str(pdf_path)) as pdf:
         for e in targets:
             m = enrollment_model(e["data"])
-            text = re.sub(r"\s+", "", pdf.pages[e["n"] - 1].extract_text() or "")
+            text = re.sub(r"\s+", "", _opage(pdf, e).extract_text() or "")
             need = [f"{m['n']}건", f"{m['monthly']}원", f"{m['paid_total']}원"] + [it["status"] for it in m["items"]]
             miss = [t for t in need if re.sub(r"\s+", "", t) not in text]
             src_nums = {x.strip(".,") for x in num.findall(e["page"].extract_text() or "")}
-            out_nums = {x.strip(".,") for x in num.findall(pdf.pages[e["n"] - 1].extract_text() or "")}
+            out_nums = {x.strip(".,") for x in num.findall(_opage(pdf, e).extract_text() or "")}
             extra = sorted(x for x in out_nums - src_nums if ("," in x or len(x) >= 3) and x != "127")
             gone = [short_product(c["name"]) for c in m["excluded"]
                     if short_product(c["name"]) and re.sub(r"\s+", "", short_product(c["name"])) in text]
@@ -19483,7 +19499,7 @@ def verify_body_values(pdf_path, entries):
         return
     with pdfplumber.open(str(pdf_path)) as pdf:
         for e in targets:
-            res, errs = pair_body_words(pdf.pages[e["n"] - 1])
+            res, errs = pair_body_words(_opage(pdf, e))
             for lab, (val, _) in e["data"]["body"].items():
                 if lab in res and res[lab] != val:
                     errs.append(f"{lab}: 원본 {val} ≠ 결과 {res[lab]}")
@@ -19506,11 +19522,78 @@ def check_history_md():
         print(f"[주의] {HISTORY_MD} 에 v{APP_VERSION} 대화·수정 이력이 없습니다. 이 파일을 고쳤다면 이력을 추가하세요.")
 
 
-def build_pdf(entries, ctx, out_path):
+ANALYSIS_REPLACES = ("products", "ages", "generation")      # 분석 쪽이 대신하는 요약 쪽 종류 (항목별 표 = 상품별 분석, 연령 표 = 연령별 분석, 구성원별 준비 금액 = 세대 분석)
+
+
+def _generation_covered(g_entry, entries):
+    """세대 분석 쪽의 값이 모두 상품별 분석의 '준비' 값과 같고 구성원이 1명이면 True (이때만 분석 쪽이 대신할 수 있다)."""
+    members = g_entry["data"]["members"]
+    if len(members) != 1:
+        return False
+    prep = {}
+    for e in entries:
+        if e["kind"] == "products" and e["mode"] == "전용":
+            for lab, v in zip(e["data"]["labels"], e["data"]["d"]["prep"]):
+                prep[lab] = v
+    m = members[0]
+    return all(prep.get(lab) == v for lab, v in list(zip(LABELS_A, m["a"])) + list(zip(LABELS_B, m["b"])))
+
+
+def replaced_by_analysis(entries, ana_slides):
+    """분석 쪽이 내용을 대신하는 원본 쪽 번호 집합. 분석 쪽이 실제로 만들어진 경우에만 대체한다.
+    상품별 분석 = 분석 슬라이드가 있으면 대체, 연령별 분석 = '연령별 보장 변화' 슬라이드가 있을 때만 대체(없으면 요약 쪽을 남겨 내용을 잃지 않는다)."""
+    if not ana_slides:
+        return set()
+    kinds = {sl["kind"] for sl in ana_slides}
+    drop = set()
+    for e in entries:
+        if e["mode"] != "전용" or e["kind"] not in ANALYSIS_REPLACES:
+            continue
+        if e["kind"] == "ages" and "ages" not in kinds:
+            continue
+        if e["kind"] == "generation" and not ("area" in kinds and _generation_covered(e, entries)):
+            continue
+        drop.add(e["n"])
+    return drop
+
+
+def _opage(pdf, e):
+    """결과 PDF 에서 원본 쪽 e 에 해당하는 쪽(대체한 쪽이 빠졌으므로 out_n 으로 찾는다)."""
+    return pdf.pages[(e.get("out_n") or e["n"]) - 1]
+
+
+def draw_analysis_page(canvas, doc):
+    """요약 PDF 끝에 붙는 분석 쪽을 그린다(쪽 바탕·글·그림 모두 Deck 으로). 쪽 번호는 요약+분석 전체 기준이다."""
+    j = canvas.getPageNumber() - doc.ana_offset - 1
+    if 0 <= j < len(doc.ana_slides):
+        _draw_slide(Deck(canvas), doc.ana_slides[j], doc.ana_offset + j + 1, doc.total_pages, doc.ana_ctx)
+
+
+def build_pdf(entries, ctx, out_path, analysis=True):
+    """요약 PDF 를 만든다. analysis=True 이면 분석 슬라이드를 맨 끝에 이어 붙이고 그 쪽 수를 돌려준다."""
     global CUSTOMER_NAME
     build_styles()
     CUSTOMER_NAME = ctx.get("name", "")
     ctx["entries"] = entries
+    ana_slides = []
+    if analysis:                                      # 분석 쪽을 못 만들어도 요약 쪽은 정상으로 만든다
+        try:
+            ana_slides = analysis_slides(entries, ctx)
+            if not ana_slides:
+                print("[분석] 분석할 상품별 분석 데이터가 없어 분석 쪽을 넣지 않았습니다.")
+        except Exception as ex:
+            ana_slides = []
+            print(f"[주의] 분석 쪽을 만들지 못했습니다(요약 쪽은 정상): {ex}")
+    all_entries = entries                              # 분석에는 모든 원본 쪽 데이터를 쓰고, 요약 쪽은 대체한 쪽을 뺀다
+    drop = replaced_by_analysis(all_entries, ana_slides)
+    entries = [e for e in all_entries if e["n"] not in drop]
+    for e in all_entries:
+        e["out_n"] = None
+    for k_, e in enumerate(entries, 1):
+        e["out_n"] = k_                                # 결과 PDF 안의 쪽 번호(검사용)
+    for e in all_entries:
+        if e["n"] in drop:
+            print(f"[대체] 원본 p.{e['n']} {e['title']} → 요약 쪽을 만들지 않고 분석 쪽으로 대체")
     cv = ctx["cover"]
     stories = [make_story(e, ctx) for e in entries]
     wides = [True for _ in entries]                   # 결과물은 항상 16:9 — 모든 쪽이 가로 쪽 양식
@@ -19522,7 +19605,8 @@ def build_pdf(entries, ctx, out_path):
     name = ctx["name"]
     doc = BaseDocTemplate(str(out_path), pagesize=(WIDE_W, WIDE_H), title=f"{name} 보장분석 요약 보고서",
                           author=cv.get("fp", ""), leftMargin=MARGIN_X, rightMargin=MARGIN_X)
-    doc.total_pages = len(entries)
+    doc.total_pages = len(entries) + len(ana_slides)
+    doc.ana_slides, doc.ana_offset, doc.ana_ctx = ana_slides, len(entries), ctx
     doc.tall_skip_pages = {1} if entries[0].get("cover_full") else set()      # 표지(cover_full)는 tall 을 직접 그린다
     doc.footer_left = (f"{name} 고객님 보장분석 요약 · {ctx['basis'] or cv.get('print_date', '')} 기준 · "
                        "보험금 지급 근거 아님, 약관·증권 우선")
@@ -19544,6 +19628,9 @@ def build_pdf(entries, ctx, out_path):
         doc.addPageTemplates([cover_t, wide_t, main_t])                  # 첫 쪽은 원본 그림 전용 큰 영역
     else:
         doc.addPageTemplates([wide_t, main_t] if wides and wides[0] else [main_t, wide_t])   # 첫 쪽 양식이 먼저
+    if ana_slides:                                                       # 분석 쪽 양식: 쪽 전체를 Deck 으로 그리므로 꼬리말·tall 은 쓰지 않는다
+        doc.addPageTemplates([PageTemplate(id="analysis", pagesize=(WIDE_W, WIDE_H), onPage=draw_analysis_page,
+                                           frames=[Frame(0, 0, 10, 10, leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)])])
     story = []
     for i, st in enumerate(stories):
         cw, fh = (WCW, WFH) if wides[i] else (CW, FH)
@@ -19561,35 +19648,761 @@ def build_pdf(entries, ctx, out_path):
         if i < len(stories) - 1:
             story.append(NextPageTemplate("wide" if wides[i + 1] else "main"))
             story.append(PageBreak())
+    if ana_slides:                                                       # 요약 쪽 뒤에 분석 쪽을 이어 붙인다
+        story.append(NextPageTemplate("analysis"))
+        story.append(PageBreak())
+        for j in range(len(ana_slides)):
+            story.append(Spacer(1, 1))
+            if j < len(ana_slides) - 1:
+                story.append(PageBreak())
     doc.build(story)
     verify_16x9(out_path)
     verify_body_values(out_path, entries)
     verify_enrollment_values(out_path, entries)
     verify_table_values(out_path, entries)
+    if ana_slides:
+        verify_analysis(out_path, ana_slides, offset=len(entries))
+    return len(ana_slides), len(drop)
 
 
-def convert(src, out, force_generic=False):
-    """PDF 한 개를 요약 PDF로 변환한다. 진행 내용은 print 로 알린다. -> (요약 쪽수, 원본 쪽수)"""
+def convert(src, out, force_generic=False, make_analysis=True, separate_analysis=False):
+    """PDF 한 개를 요약 PDF로 변환한다. 분석 쪽은 요약 PDF 맨 끝에 들어간다. 진행 내용은 print 로 알린다. -> (전체 쪽수, 원본 쪽수, 분석 쪽수, 대체한 원본 쪽수)"""
     register_fonts()
     print(f"[버전] {APP_VERSION}  (출력: 16:9)")
     check_history_md()
+    n_ana = n_drop = 0
     with pdfplumber.open(str(src)) as pdf:
         n_src = len(pdf.pages)
         entries, ctx = analyze_pdf(pdf, force_generic)
         print(f"[원본] {n_src}쪽 — 쪽별 처리")
         for e in entries:
             print(f"  p.{e['n']:>2}  {e['title']}  [{e['mode']}]" + (f"  ※ {e['note']}" if e["note"] else ""))
-        build_pdf(entries, ctx, out)
+        n_ana, n_drop = build_pdf(entries, ctx, out, analysis=make_analysis)
+        if make_analysis and separate_analysis:            # 별도 파일은 선택 사항 — 실패해도 요약 PDF 에 영향을 주지 않는다
+            try:
+                ap = analysis_path(out)
+                if build_analysis_pdf(entries, ctx, ap):
+                    print(f"[완료] 분석 PDF(별도)  {ap}")
+            except Exception as ex:
+                print(f"[주의] 별도 분석 PDF 를 만들지 못했습니다(요약 PDF 는 정상): {ex}")
     n_out = None
     try:
         with pdfplumber.open(str(out)) as po:
             n_out = len(po.pages)
-        print(f"[완료] {out}  (요약 {n_out}쪽 / 원본 {n_src}쪽)")
-        if n_out != n_src:
-            print("[경고] 쪽수가 원본과 다릅니다. 내용이 한 쪽을 넘쳤는지 확인하세요.")
+        extra = f" + 분석 {n_ana}쪽" if n_ana else ""
+        cut = f", 분석으로 대체한 원본 {n_drop}쪽 제외" if n_drop else ""
+        print(f"[완료] {out}  (요약 {n_out - n_ana}쪽{extra} = 전체 {n_out}쪽 / 원본 {n_src}쪽{cut})")
+        if n_out - n_ana != n_src - n_drop:
+            print("[경고] 요약 쪽수가 원본과 다릅니다. 내용이 한 쪽을 넘쳤는지 확인하세요.")
     except Exception:
         print(f"[완료] {out}")
-    return n_out, n_src
+    return n_out, n_src - n_drop, n_ana, n_drop
+
+
+# ----------------------------------------------------------------------------
+# 6-B. 분석 PDF — 원본 3~8쪽(세대·상품별·신체부위·연령별)의 숫자를 분석·정리해 16:9 슬라이드 9장으로 만든다.
+#   요약 PDF 맨 끝(원본 쪽 수 뒤)에 이어 붙는다(1.19~). 앞쪽의 '원본 N쪽 = 요약 N쪽' 대응은 그대로다. 별도 파일(<이름>_분석.pdf)은 --separate-analysis.
+#   기법: ① 항목 36개를 필요·준비·부족으로 읽어 적정/부족/미보장으로 분류 → ② 영역별 개수·준비율·순위를 계산
+#         → ③ 슬라이드마다 '한 문장 결론(큰 제목) + 근거 설명 + 카드/표/그림'으로 정리 → ④ 원본 값은 문자열 그대로 인용하고
+#         계산한 값(비율·합계·순위)은 고정한 식으로만 만든다 → ⑤ 인용한 원본 값이 결과 PDF 에 있는지 다시 대조한다.
+#   자세한 규칙은 md 「3-6」, 고정값은 md 5장·AN_* 상수.
+# ----------------------------------------------------------------------------
+AN_NAME = "분석 PDF"
+AN_BG = "#FFFFFF"                # 슬라이드 바탕
+AN_LABEL = "#374151"             # 작은 제목(남색)
+AN_INK = "#111827"               # 큰 제목·본문 글자
+AN_SUB = "#4B5563"               # 한 줄 설명 글자
+AN_GRAY = "#6B7280"              # 보조 글자
+AN_CARD = "#FFFFFF"              # 카드 바탕
+AN_CARD_LINE = "#D5DAE2"         # 카드 테두리
+AN_BOX = "#F3F5F9"               # 인사이트 상자 바탕
+AN_C_OK, AN_C_LOW, AN_C_NONE = "#1B8A80", "#E28E3A", "#C54648"      # 막대 색: 적정 / 부족 / 미보장
+AN_T_OK, AN_T_LOW, AN_T_NONE = "#1B8A80", "#C97614", "#C54648"      # 글자 색: 적정 / 부족 / 미보장
+AN_C_NEED, AN_C_PREP = "#17306B", "#1B8A80"                          # 막대 색: 필요 / 준비
+AN_TOP_N = 5                     # 핵심 진단비 슬라이드에 올리는 항목 수 (부족 금액 큰 순)
+AN_AREA_ROWS = 8                  # 영역별 슬라이드 오른쪽 표에 올리는 부족 항목 수 (준비율 낮은 순)
+AN_RED_BELOW = 30                # 준비율(%)이 이 값 미만이면 빨간 글자, 이상이면 갈색 글자
+AN_DROP_BIG = 50                 # 연령에 따라 줄어든 비율(%)이 이 값 이상이면 '크게/급감'
+AN_DISP = {"LTC": "LTC (장기요양)", "CI": "CI (중대질병)", "GI": "GI (일반중대질병)"}    # 그림 라벨용 이름
+AN_CARE = ("LTC", "중증치매", "중등도치매", "경도치매")                                    # 간병 관련 항목
+AN_TOPIC = {"진단": "진단비", "사망": "사망 보장", "항암": "항암 치료비", "입원": "입원비", "통원": "통원비",
+            "수술": "수술비", "실손": "실손의료비"}                                       # 영역 이름 → 문장용 이름
+
+
+def _num(s):
+    s = (s or "").replace(",", "").strip()
+    return float(s) if re.fullmatch(r"\d+(\.\d+)?", s) else None
+
+
+def _rhu(x):                      # 반올림: 0.5 는 올림 (고정)
+    return int(x + 0.5)
+
+
+def _disp_group(g):               # 영역 이름 정리: '진단(재해골절)'→'진단', '의료비 실손'→'실손'
+    return "실손" if "실손" in g else g.split("(")[0]
+
+
+def _josa(word, with_final, no_final):
+    ch = word[-1]
+    if "가" <= ch <= "힣":
+        return with_final if (ord(ch) - 0xAC00) % 28 else no_final
+    return no_final
+
+
+def _fmt_k(v):
+    if v >= 1000:
+        return f"{float(f'{v / 1000:.3g}'):g}k"
+    return f"{int(v)}"
+
+
+def _nice_max(v):
+    import math
+    e = 10 ** math.floor(math.log10(v))
+    for m_ in (1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8, 10):
+        if m_ * e >= v:
+            return m_ * e
+    return v
+
+
+def analysis_data(entries, ctx):
+    """원본에서 읽은 값을 분석용으로 모은다. 항목(items)·연령(ages)·계약 정보."""
+    items, head = [], None
+    for e in entries:
+        if e["kind"] == "products" and e["mode"] == "전용":
+            d = e["data"]["d"]
+            gmap = {lab: g for g, labs in e["data"]["groups"] for lab in labs}
+            if d.get("head"):
+                head = d["head"]
+            for i, lab in enumerate(e["data"]["labels"]):
+                st = status_of(d["prep"][i], d["short"][i])
+                items.append(dict(group=gmap.get(lab, ""), g=_disp_group(gmap.get(lab, "")), label=lab, need=d["need"][i],
+                                  prep=d["prep"][i], short=d["short"][i], status=st,
+                                  nn=_num(d["need"][i]), np=_num(d["prep"][i]) or 0.0, ns=_num(d["short"][i]) or 0.0))
+    ages, age_order = {}, []
+    for e in entries:
+        if e["kind"] == "ages" and e["mode"] == "전용":
+            for age, vals in e["data"]["rows"]:
+                if age not in age_order:
+                    age_order.append(age)
+            for j, lab in enumerate(e["data"]["labels"]):
+                ages[lab] = {age: vals[j] for age, vals in e["data"]["rows"]}
+    paid_whole_life = any(c.get("expiry") == "종신" and str(c.get("count", "")).endswith("(0)") and c.get("premium") not in ("0", "")
+                          for c in ctx.get("contracts", []))
+    foot50 = any("50%가 감액" in (e.get("text") or "") for e in entries)
+    return dict(items=items, head=head, ages=ages, age_order=age_order, paid_whole_life=paid_whole_life, foot50=foot50)
+
+
+def analysis_slides(entries, ctx):
+    """분석 슬라이드 목록(dict)을 만든다. 필요한 데이터가 없으면 그 슬라이드는 건너뛴다. quotes = 원본에서 그대로 인용한 값."""
+    A = analysis_data(entries, ctx)
+    items = A["items"]
+    slides = []
+    if not items:
+        return slides
+    total = len(items)
+    cnt = {k: sum(1 for it in items if it["status"] == k) for k in ("적정", "부족", "미보장")}
+    ok, low, none = cnt["적정"], cnt["부족"], cnt["미보장"]
+    h = A["head"]
+    if h and (str(total), str(ok), str(low), str(none)) != (h["total"], h["ok"], h["low"], h["none"]):
+        print(f"[주의] 분석: 항목 분류 결과({total}/{ok}/{low}/{none})가 원본 합계({h['total']}/{h['ok']}/{h['low']}/{h['none']})와 다릅니다.")
+    order = []
+    for it in items:
+        if it["g"] not in order:
+            order.append(it["g"])
+
+    def by_group(pred):
+        return {g: sum(1 for it in items if it["g"] == g and pred(it)) for g in order}
+    size = {g: sum(1 for it in items if it["g"] == g) for g in order}
+    okg, lowg, nong = by_group(lambda i: i["status"] == "적정"), by_group(lambda i: i["status"] == "부족"), by_group(lambda i: i["status"] == "미보장")
+    strong = [g for g in sorted(order, key=lambda g: -okg[g]) if okg[g] * 2 >= size[g] and okg[g] > 0]
+    weak_all = sorted([g for g in order if lowg[g] + nong[g] > 0], key=lambda g: -(lowg[g] + nong[g]))
+    uncovered = sorted([it for it in items if it["status"] == "미보장"], key=lambda it: -it["nn"])
+    name = ctx.get("name", "")
+    basis = ctx.get("basis", "")
+
+    # 1 종합 진단
+    if total:
+        pct = (low + none) / total * 100
+        weak3 = weak_all[:3]
+        lowtop = sorted([g for g in order if lowg[g] > 0], key=lambda g: -lowg[g])[:2]
+        slides.append(dict(kind="summary", label=f"전체 {total}개 항목 종합 진단",
+                           headline=f"{total}개 항목 중 적정은 {ok}개, 보완이 필요한 항목은 {low + none}개예요",
+                           sub=(f"{'·'.join(strong)} 보장은 탄탄하지만, {'·'.join(weak3)} 등 {low + none}개 항목은 추가 대비가 권장돼요."
+                                if strong else f"{'·'.join(weak3)} 등 {low + none}개 항목은 추가 대비가 권장돼요."),
+                           cards=[("보장 적정", ok, AN_T_OK, AN_C_OK, f"{'·'.join(strong) or '-'} 등 현재 충분히 갖춰진 영역"),
+                                  ("보장 부족", low, AN_T_LOW, AN_C_LOW, f"{'·'.join(lowtop) or '-'} 등 증액 필요"),
+                                  ("미보장", none, AN_T_NONE, AN_C_NONE,
+                                   (", ".join(it["label"] for it in uncovered[:3]) + " 등 보장 공백 상태인 항목") if uncovered else "해당 없음")],
+                           bars=[("적정", ok, AN_C_OK, "#FFFFFF"), ("부족", low, AN_C_LOW, "#111111"), ("미보장", none, AN_C_NONE, "#FFFFFF")],
+                           insight=[("전체 ", False), (f"{total}개", True), (" 분석 항목 중 부족(", False), (f"{low}개", True), (")과 미보장(", False),
+                                    (f"{none}개", True), (")이 도합 ", False), (f"{pct:.1f}%", True), ("를 차지하고 있어요. ", False),
+                                    ("우선순위 중심의 재설계가 필요해요." if pct >= 50 else "부족한 영역만 골라 보완하면 돼요.", False)],
+                           quotes=[]))
+
+    # 2 핵심 진단비
+    diag = [it for it in items if it["group"] == "진단" and it["status"] == "부족"]
+    top = sorted(diag, key=lambda it: -it["ns"])[:AN_TOP_N]
+    if len(top) >= 2:
+        sel = [it for it in items if it in top]                          # 그림은 원본 순서
+        r_all = sum(i["np"] for i in sel) / sum(i["nn"] for i in sel) * 100
+        rs = [i["np"] / i["nn"] * 100 for i in sel]
+        slides.append(dict(kind="diag", label="핵심 진단비 분석", headline=f"진단비는 필요액의 약 {_rhu(r_all)}%만 준비돼 있어요",
+                           sub=f"{'·'.join(i['label'] for i in sel)} 진단비가 필요 금액 대비 크게 부족해 집중 보완이 시급해요.",
+                           chart=dict(cats=[i["label"] for i in sel], need=[i["nn"] for i in sel], prep=[i["np"] for i in sel], xlabel="진단비 항목"),
+                           table=[(i["label"], f"{i['short']}만원 부족") for i in top],
+                           note=f"단위: 만원 · 필요액 대비 준비액 비율은 {_rhu(min(rs))}~{_rhu(max(rs))}% 수준이에요.",
+                           quotes=[i["short"] for i in top]))
+    # 3 항암 치료비
+    chemo = [it for it in items if it["g"] == "항암"]
+    if chemo:
+        mx = max(i["nn"] for i in chemo)
+        rep = [i for i in chemo if i["nn"] == mx]
+        rep_r = _rhu(min(i["np"] / i["nn"] * 100 for i in rep))
+        cards = []
+        for i in sorted(chemo, key=lambda i: -i["nn"]):
+            r = _rhu(i["np"] / i["nn"] * 100)
+            cards.append((i["label"] + (" 치료" if not i["label"].endswith("치료") and not i["label"].endswith("약물치료") else ""),
+                          f"필요 {i['need']} / 준비 {i['prep']}만원",
+                          (f"{i['short']}만원 부족 (준비율 {r}%)" if i["ns"] else "필요액을 충족해요"),
+                          AN_T_NONE if r < AN_RED_BELOW else AN_T_LOW))
+        names = "·".join(i["label"] for i in rep)
+        slides.append(dict(kind="chemo", label="암 치료 기술별 보장 현황", headline=f"항암 치료비는 필요액의 {rep_r}%만 준비돼 있어요",
+                           sub=f"최신 {names} 등 비급여 치료비 필요액 {rep[0]['need']}만원 중 현재 {rep[0]['prep']}만원만 보장돼요.",
+                           chart=dict(cats=[i["label"] for i in chemo], need=[i["nn"] for i in chemo], prep=[i["np"] for i in chemo], xlabel="항암 치료 항목"),
+                           cards=cards, quotes=[c for i in chemo for c in (i["need"], i["prep"], i["short"]) if c != "-"], rep=rep, rep_r=rep_r))
+    # 4 미보장
+    if uncovered:
+        names3, seen = [], set()
+        for it in uncovered:
+            nm = "치매" if "치매" in it["label"] else it["label"]
+            if nm not in seen:
+                seen.add(nm)
+                names3.append(nm)
+        cand = [it for it in uncovered if it["label"] in AN_CARE]          # 간병 관련 항목이 있으면 그 중 필요액 큰 2개, 없으면 전체 상위 2개
+        pick = cand[:2] if cand else uncovered[:2]
+        a, b = pick[0], (pick[1] if len(pick) > 1 else None)
+        care = bool(cand)
+        ins = [(a["label"], True), (f"({a['need']}만원)", True)]
+        if b:
+            ins += [("와 ", False), (b["label"], True), (f"({b['need']}만원)", True), (_josa(b["label"], "은", "는") + " ", False)]
+        else:
+            ins += [(_josa(a["label"], "은", "는") + " ", False)]
+        ins += [("장기 간병 비용 부담이 가장 큰 항목이에요." if care else "필요액이 가장 큰 항목이에요.", False)]
+        slides.append(dict(kind="uncovered", label=f"미보장 {len(uncovered)}개 영역",
+                           headline=f"{'·'.join(names3[:3])} 등 {len(uncovered)}개 항목은 아직 보장이 없어요",
+                           sub=f"{', '.join(it['label'] for it in uncovered[:4])} 등 필요 보장의 준비액이 0원이에요.",
+                           bars=[(AN_DISP.get(it["label"], it["label"]), it["nn"]) for it in uncovered],
+                           insight1=ins, insight2=[("현재 가입 계약에는 해당 담보가 전혀 포함되어 있지 않으므로 " +
+                                                    ("노후 간병 대비책" if care else "대비책") + " 검토가 필수적이에요.", False)],
+                           quotes=[a["need"]] + ([b["need"]] if b else []), top2=(a, b), care=care))
+    # 5 사망 보장
+    death = [it for it in items if it["g"] == "사망"]
+    if len(death) >= 2:
+        rs = [i["np"] / i["nn"] * 100 for i in death]
+        dg = [it for it in items if it["group"] == "진단" and it["np"] > 0]
+        d_r = sum(i["np"] for i in dg) / sum(i["nn"] for i in dg) * 100 if dg else None
+        d_all = sum(i["np"] for i in death) / sum(i["nn"] for i in death) * 100
+        lead = "기납입 완료된 종신보험 덕분에 " if A["paid_whole_life"] else ""
+        cmp_ = ("사망 보장은 진단비에 비해 양호하게 채워져 있어요." if (d_r is None or d_all > d_r) else "사망 보장도 진단비처럼 보완이 필요해요.")
+        drop_age = None
+        s = A["ages"].get(death[0]["label"], {})
+        prev = None
+        for ag in A["age_order"]:
+            v = _num(s.get(ag))
+            if prev is not None and v is not None and v < prev:
+                drop_age = ag
+                break
+            prev = v if v is not None else prev
+        note = (f"진단비(약 {_rhu(d_r)}%)에 비하면 상대적으로 충실히 준비되어 있으나" if d_r is not None and d_all > d_r else "") + \
+               (f", {drop_age} 이후 감액 구조는 확인할 필요가 있어요." if drop_age else ".")
+        slides.append(dict(kind="death", label="사망 보장 점검", headline=f"사망 보장은 필요액의 {_rhu(min(rs))}~{_rhu(max(rs))}% 수준이에요",
+                           sub=lead + cmp_,
+                           chart=dict(cats=[i["label"] for i in death], need=[i["nn"] for i in death], prep=[i["np"] for i in death], xlabel="사망 보장 구분"),
+                           table=[(i["label"], f"{i['prep']} / {i['need']}", f"{r:.1f}%") for i, r in zip(death, rs)],
+                           note=note.lstrip(", "), quotes=[v for i in death for v in (i["prep"], i["need"])]))
+    # 6 안정 영역
+    okitems = [it for it in items if it["status"] == "적정"]
+    if okitems:
+        gs = sorted({i["g"] for i in okitems}, key=lambda g: (-okg[g], order.index(g)))[:3]
+        cards = []
+        for g in gs:
+            its = [i for i in okitems if i["g"] == g]
+            minr = min(i["np"] / i["nn"] for i in its)
+            full = all(i["np"] == i["nn"] for i in its)
+            lines = [(i["label"], i["prep"], i["need"]) for i in its[:4]]
+            cards.append(dict(title=f"{g} 보장", badge="✓ 100% 충족" if full else "✓ 적정 보장", lines=lines, more=len(its) - 4,
+                              foot=("필요액 전액 충족" if full else ("필요액 이상 준비 완료" if minr < 1.1 else f"필요 대비 {int(minr * 10) / 10:.1f}배 이상 준비 완료"))))
+        w2 = weak_all[:2]
+        wn = [AN_TOPIC.get(g, g) for g in w2]
+        st = "·".join(gs)
+        tail = (f"부족한 {wn[0]}{_josa(wn[0], '과', '와')} {wn[1]} 쪽으로 예산을 집중하는 것이 경제적이에요." if len(wn) == 2
+                else (f"부족한 {wn[0]} 쪽으로 예산을 집중하는 것이 경제적이에요." if wn else "예산 배분을 점검하면 돼요."))
+        slides.append(dict(kind="stable", label=f"안정 영역 (적정 {len(okitems)}개 항목)", headline=f"{st}{_josa(st, '은', '는')} 충분해서 짧게 짚어요",
+                           sub=f"{st}{_josa(st, '은', '는')} 필요 기준 이상 준비되어 있어 추가 지출을 줄여도 되는 안전 지대예요.", cards=cards,
+                           point=[("설계 포인트: ", True), (f"{st} 담보는 이미 충분하므로, 신규 가입 시 중복 투자를 피하고 " + tail, False)],
+                           quotes=[v for c in cards for (_, p, n) in c["lines"] for v in (p, n)]))
+    # 7 연령별 변화
+    ages, ao = A["ages"], A["age_order"]
+
+    def run(label):
+        vals = [(ag, ages.get(label, {}).get(ag)) for ag in ao]
+        return [(ag, v) for ag, v in vals if _num(v) is not None]
+    changed = []
+    for it in items:
+        rr = run(it["label"])
+        if len(rr) >= 2 and rr[0][1] != rr[-1][1]:
+            vs = [_num(v) for _, v in rr]
+            first_chg = next(k for k in range(1, len(rr)) if rr[k][1] != rr[k - 1][1])
+            changed.append(dict(it=it, a_from=rr[first_chg - 1][0], a_to=rr[first_chg][0], v_from=rr[first_chg - 1][1], v_to=rr[first_chg][1],
+                                rel=(_num(rr[first_chg][1]) - _num(rr[first_chg - 1][1])) / _num(rr[first_chg - 1][1]), rr=rr))
+    drops = [c for c in changed if c["rel"] < 0]
+    d_death = [c for c in drops if c["it"]["g"] == "사망"]          # 대표 항목 = 사망 영역에서 연령에 따라 줄어드는 첫 항목(원본 순서)
+    if d_death:
+        c1 = d_death[0]
+        pct = _rhu(_num(c1["v_to"]) / _num(c1["v_from"]) * 100)
+        big = -c1["rel"] * 100 >= AN_DROP_BIG
+        rr = c1["rr"]
+        cats, vals = [], []
+        last_num = max([k for k, (ag, _) in enumerate(rr) if ag != "종신"] or [len(rr) - 1])
+        for k, (ag, v) in enumerate(rr):                                  # 구간이 바뀌는 지점의 앞·뒤 연령과 마지막 숫자 연령만 그림에 올린다
+            if k == 0 or k == last_num or rr[k - 1][1] != v or (k + 1 < len(rr) and rr[k + 1][1] != v):
+                if ag != "종신":
+                    cats.append(ag)
+                    vals.append(_num(v))
+        cards = [dict(title="사망 보장 축소", l1=f"{c1['a_from']}까지 {c1['v_from']}만원 유지", l2=f"{c1['a_to']}부터 {c1['v_to']}만원으로 {'급감' if big else '감소'}")]
+        quotes = [c1["v_from"], c1["v_to"]]
+        d_diag = sorted([c for c in drops if c["it"]["group"] == "진단"], key=lambda c: c["rel"] * _num(c["v_from"]))
+        if d_diag:
+            c2 = d_diag[0]
+            cards.append(dict(title=f"{c2['it']['label']} 진단비 감액", l1=f"{c2['a_from']} {c2['v_from']}만원에서", l2=f"{c2['a_to']} 이후 {c2['v_to']}만원으로 감소"))
+            quotes += [c2["v_from"], c2["v_to"]]
+        ups = [c for c in changed if c["rel"] > 0 and c["it"]["g"] == "입원"]
+        if ups:
+            c3 = ups[0]
+            nm = c3["it"]["label"].split("(")[0]
+            cards.append(dict(title="입원 일당 소폭 증가", l1=f"{nm} 일당은 {c3['a_to']} 이후", l2=f"{c3['v_from']}만원 → {c3['v_to']}만원으로 증가"))
+            quotes += [c3["v_from"], c3["v_to"]]
+        slides.append(dict(kind="ages", label="연령별 보장 변화", headline=f"연령이 들면 {c1['it']['g']}보장이 {'크게 ' if big else ''}줄어요",
+                           sub=f"{c1['a_from']} 이후 {c1['a_to']}에 도달하면 {c1['it']['label']} 보장금액이 기존의 약 {pct}% 수준으로 축소돼요.",
+                           chart=dict(cats=cats, vals=vals, title=f"{c1['it']['label']} 보장금액 (만원)", xlabel="연령 구간"), cards=cards, quotes=quotes))
+    # 2 영역별 보장 준비 현황 (세대 분석 쪽을 대신함): 영역마다 Σmin(준비,필요) ÷ Σ필요, 다른 슬라이드에서 다루지 않은 부족 항목을 함께 정리
+    area = []
+    for g in order:
+        its_ = [i for i in items if i["g"] == g and i["nn"]]
+        ns_ = sum(i["nn"] for i in its_)
+        if ns_ > 0:
+            area.append(dict(g=g, rate=sum(min(i["np"], i["nn"]) for i in its_) / ns_ * 100, full=(lowg[g] + nong[g] == 0 and okg[g] > 0)))
+    if len(area) >= 2:
+        asc = sorted(area, key=lambda a_: a_["rate"])
+        nfull = sum(1 for a_ in area if a_["full"])
+
+        def _pr(r):
+            return min(_rhu(r), 99) if r < 100 else _rhu(r)
+        if nfull == len(area):
+            head_ = f"{len(area)}개 보장 영역 모두 필요액을 채웠어요"
+        elif nfull == 0:
+            head_ = f"{len(area)}개 보장 영역 모두 보완이 필요해요"
+        else:
+            head_ = f"{len(area)}개 보장 영역 중 필요액을 모두 채운 영역은 {nfull}개예요"
+        lows_ = [a_ for a_ in asc if a_["rate"] < 100][:3]
+        sub_ = ("준비율이 낮은 영역은 " + ", ".join(f"{AN_TOPIC.get(a_['g'], a_['g'])} {_pr(a_['rate'])}%" for a_ in lows_) + " 순이에요."
+                if lows_ else "모든 영역의 준비율이 100% 이상이에요.")
+        bars_ = []
+        for a_ in asc:
+            col_ = AN_C_NONE if a_["rate"] < AN_RED_BELOW else (AN_C_LOW if a_["rate"] < 100 else AN_C_OK)
+            bars_.append((a_["g"], min(a_["rate"], 100.0), col_, "#FFFFFF" if col_ in (AN_C_OK, AN_C_NONE) else "#111111", f"{_pr(a_['rate'])}%"))
+        covered_ = {id(i) for i in top} if len(top) >= 2 else set()
+        extra = [i for i in items if i["status"] == "부족" and i["nn"] and not (i["g"] == "항암" and chemo)
+                 and not (i["g"] == "사망" and len(death) >= 2) and id(i) not in covered_]
+        extra.sort(key=lambda i: i["np"] / i["nn"])
+        rows_ = [(i["label"], f"{i['prep']} / {i['need']}", i["np"] / i["nn"] * 100) for i in extra[:AN_AREA_ROWS]]
+        gen_ = next((e for e in entries if e["kind"] == "generation" and e["mode"] == "전용"), None)
+        mem_ = gen_["data"]["members"] if gen_ else []
+        who_ = f" · {mem_[0]['name']} ({mem_[0]['age']}세)" if len(mem_) == 1 else ""
+        more_ = len(extra) - len(rows_)
+        slides.insert(1, dict(kind="area", label="영역별 보장 준비 현황" + who_, headline=head_, sub=sub_, bars=bars_, rows=rows_, more=more_,
+                              note="※ 다른 슬라이드에서 다루지 않은 부족 항목이에요. 준비율이 낮은 순이며 단위는 만원이에요." + (f" 외 {more_}개가 더 있어요." if more_ > 0 else ""),
+                              quotes=[v for r_ in rows_ for v in r_[1].split(" / ")] + ([mem_[0]["age"]] if len(mem_) == 1 else [])))
+    # 8 보완 순서
+    steps = []
+    if len(top) >= 2:
+        t2 = sorted(top, key=lambda i: -i["ns"])[:2]
+        steps.append((f"{t2[0]['label']}·{t2[1]['label']} 진단비 먼저", f"부족액: {t2[0]['label']} {t2[0]['short']}만원, {t2[1]['label']} {t2[1]['short']}만원",
+                      [t2[0]["short"], t2[1]["short"]]))
+    for sl in slides:
+        if sl["kind"] == "chemo":
+            nm = "·".join(i["label"].replace("항암", "") for i in sl["rep"])
+            steps.append(("항암 치료비 보완", f"{nm} 치료비 준비율 {sl['rep_r']}%", []))
+    unc = next((sl for sl in slides if sl["kind"] == "uncovered"), None)
+    if unc:
+        a, b = unc["top2"]
+        nm = f"{a['label']}·{b['label']}" if b else a["label"]
+        steps.append((f"미보장 {len(uncovered)}개 중 {nm} 검토", "필요액: " + f"{a['label']} {a['need']}만원" + (f", {b['label']} {b['need']}만원" if b else ""),
+                      [a["need"]] + ([b["need"]] if b else [])))
+    if steps:
+        ymd = re.match(r"(\d{4})-(\d{1,2})-(\d{1,2})", basis or "")
+        when = f"{int(ymd.group(1))}년 {int(ymd.group(2))}월 {int(ymd.group(3))}일" if ymd else (basis or "")
+        caution = [("확인할 점: ", True), ((f"수치는 {when} 기준이며 " if when else "수치는 ") + "약관·증권과 다를 수 있어요." +
+                                          (" 1년 이내 가입 상품은 50% 감액될 수 있어요." if A["foot50"] else ""), False)]
+        slides.append(dict(kind="plan", label="보완 순서 제안 & 유의사항", headline="보완 순서 제안과 확인할 점", sub="보완 순서는 정리자의 제안이에요.",
+                           steps=steps, caution=caution, quotes=[q for s_ in steps for q in s_[2]]))
+    return slides
+
+
+class Deck:
+    """분석 슬라이드 그리기 도구. 좌표는 1456×819 가상 화면(왼쪽 위 기준, px)이며 16:9 쪽 크기에 비율 그대로 맞춘다."""
+    K = WIDE_W / 1456.0
+
+    def __init__(self, c):
+        self.c = c
+
+    def X(self, v):
+        return v * self.K
+
+    def Y(self, v):
+        return WIDE_H - v * self.K
+
+    def box(self, x, y, w, h, fill=None, stroke=None, r=0, lw=1, dash=None):
+        c = self.c
+        c.saveState()
+        if fill:
+            c.setFillColor(colors.HexColor(fill))
+        if stroke:
+            c.setStrokeColor(colors.HexColor(stroke))
+            c.setLineWidth(lw * self.K)
+        if dash:
+            c.setDash(*[d * self.K for d in dash])
+        c.roundRect(self.X(x), self.Y(y + h), w * self.K, h * self.K, r * self.K, fill=1 if fill else 0, stroke=1 if stroke else 0)
+        c.restoreState()
+
+    def line(self, x1, y1, x2, y2, color, lw=1, dash=None):
+        c = self.c
+        c.saveState()
+        c.setStrokeColor(colors.HexColor(color))
+        c.setLineWidth(lw * self.K)
+        if dash:
+            c.setDash(*[d * self.K for d in dash])
+        c.line(self.X(x1), self.Y(y1), self.X(x2), self.Y(y2))
+        c.restoreState()
+
+    def _font(self, s, bold):
+        miss = bool(GLYPHS) and any(ord(ch) >= 128 and ord(ch) not in GLYPHS for ch in s)
+        font = CID_FALLBACK if miss else (FONT_B if bold else FONT)
+        return font, bold and (miss or FONT_B == FONT)
+
+    def width(self, s, size, bold=False):
+        font, _ = self._font(s, bold)
+        return pdfmetrics.stringWidth(s, font, size * self.K) / self.K
+
+    def text(self, x, y, s, size, color, bold=False, align="L"):
+        w = self.width(s, size, bold)
+        x0 = x - w if align == "R" else (x - w / 2 if align == "C" else x)
+        font, fake = self._font(s, bold)
+        col = colors.HexColor(color) if isinstance(color, str) else color
+        t = self.c.beginText(self.X(x0), self.Y(y))
+        t.setFont(font, size * self.K)
+        t.setFillColor(col)
+        t.setTextRenderMode(2 if fake else 0)               # 글자 그리기 방식은 다음 글자에도 이어지므로 매번 정한다
+        if fake:
+            self.c.setStrokeColor(col)
+            self.c.setLineWidth(size * self.K * 0.025)
+        t.textOut(s)
+        self.c.drawText(t)
+        return x0 + w
+
+    def para(self, x, y, w, spans, size, color, lead=1.42):
+        """여러 줄 글. spans = [(글, 굵게)]. 단어 단위로 줄을 나눈다. 마지막 줄 아래 y 를 돌려준다."""
+        toks = []
+        for t, b in spans:
+            for p in re.split(r"(\s+)", t):
+                if p:
+                    toks.append((p, b, self.width(p, size, b)))
+        lines, cur = [[]], 0.0
+        for p, b, pw in toks:
+            if p.isspace():
+                if lines[-1]:
+                    lines[-1].append((p, b, pw))
+                    cur += pw
+                continue
+            if cur + pw > w and lines[-1]:
+                lines.append([])
+                cur = 0.0
+            lines[-1].append((p, b, pw))
+            cur += pw
+        yy = y
+        for ln in lines:
+            xx = x
+            for p, b, pw in ln:
+                if not p.isspace():
+                    self.text(xx, yy, p, size, color, b)
+                xx += pw
+            yy += size * lead
+        return yy
+
+    def chip(self, x, y, color, label):
+        w = self.width(label, 14) + 56
+        self.box(x, y, w, 30, fill="#FFFFFF", stroke="#D9DEE6", r=15)
+        self.box(x + 14, y + 9, 12, 12, fill=color, r=3)
+        self.text(x + 34, y + 21, label, 14, "#374151")
+        return x + w + 14
+
+    def vbars(self, x, y, w, h, cats, series, ymax, xlabel=""):
+        """묶음 세로 막대. series = [(이름, 색, 값들)]. 점선 틀 안에 그리고 막대 안(작으면 위)에 값을 적는다."""
+        fx, fw = x + 52, w - 52
+        self.box(fx, y, fw, h, stroke="#DDE2E9", r=10, dash=(4, 4))
+        base, topy = y + h - 12, y + 26
+        self.text(x + 44, base + 5, "0", 15, "#374151", align="R")
+        self.text(x + 44, topy + 5, _fmt_k(ymax), 15, "#374151", align="R")
+        self.line(fx, topy, fx + fw, topy, "#DDE2E9", 1, (4, 4))
+        n, ns = len(cats), len(series)
+        sw = fw / n
+        bw = min(52.0, sw * 0.8 / ns)
+        gap = 8
+        for i, cat in enumerate(cats):
+            gw = ns * bw + (ns - 1) * gap
+            gx = fx + sw * i + (sw - gw) / 2
+            for j, (_, col, vals) in enumerate(series):
+                v = vals[i]
+                bh = max(2.0, v / ymax * (base - topy))
+                bx, by = gx + j * (bw + gap), base - bh
+                self.box(bx, by, bw, bh, fill=col, r=6)
+                lab = _fmt_k(v)
+                dark = col in (AN_C_NEED, "#2E5C8F", "#1E3A5F")
+                if bh >= 34:
+                    self.text(bx + bw / 2, by + 24, lab, 15, "#FFFFFF" if dark else "#111111", align="C")
+                else:
+                    lw_ = self.width(lab, 15) + 14
+                    self.box(bx + bw / 2 - lw_ / 2, by - 30, lw_, 24, fill="#E3E5E8", r=8)
+                    self.text(bx + bw / 2, by - 12, lab, 15, "#111111", align="C")
+            self.text(fx + sw * i + sw / 2, y + h + 32, cat, 17, "#1F2937", align="C")
+        if xlabel:
+            self.text(fx + fw / 2, y + h + 64, xlabel, 16, "#374151", align="C")
+
+    def hbars(self, x, y, w, rows, vmax, step, axis_title, label_w=110, bar_h=34, gap=14, show_val=True):
+        """가로 막대. rows = [(이름, 값, 색, 값글자색)]. 점선 틀 + 눈금."""
+        n = len(rows)
+        ph = n * bar_h + (n - 1) * gap + 40
+        px0, pw = x + label_w, w - label_w
+        self.box(px0, y, pw, ph, stroke="#DDE2E9", r=10, dash=(4, 4))
+        k = 0
+        while k * step <= vmax + 1e-9:
+            gx = px0 + 10 + (pw - 20) * (k * step) / vmax
+            if k:
+                self.line(gx, y, gx, y + ph, "#E5E8ED", 1, (4, 4))
+            self.text(gx, y + ph + 26, _fmt_k(k * step) if vmax >= 1000 else f"{int(k * step)}", 15, "#374151", align="C")
+            k += 1
+        for i, r_ in enumerate(rows):
+            nm, v, col = r_[0], r_[1], r_[2]
+            by = y + 20 + i * (bar_h + gap)
+            bw = max(8.0, (pw - 20) * v / vmax)
+            self.box(px0 + 10, by, bw, bar_h, fill=col, r=8)
+            self.text(px0 - 12, by + bar_h / 2 + 6, nm, 17, "#1F2937", align="R")
+            if show_val:
+                self.text(px0 + 10 + bw - 12, by + bar_h / 2 + 6, f"{int(v)}", 15, r_[3] if len(r_) > 3 else "#111111", align="R")
+        self.text(px0 + pw / 2, y + ph + 58, axis_title, 16, "#374151", align="C")
+        return y + ph + 64
+
+
+def _slide_frame(D, s, n, N, name, basis):
+    """분석 쪽 틀 — 요약 1~3쪽과 같은 분위기: 흰 바탕, 작은 제목+오른쪽 표시, 같은 꼬리말, 오른쪽 끝 tall."""
+    c = D.c
+    c.setFillColor(colors.HexColor(AN_BG))
+    c.rect(0, 0, WIDE_W, WIDE_H, fill=1, stroke=0)
+    D.text(67, 76, s["label"], 16, AN_LABEL, True)
+    D.text(1388, 76, (f"{name} 고객님 · 분석" if name else "분석"), 15, AN_GRAY, align="R")
+    D.text(67, 124, s["headline"], 40, AN_INK, True)
+    D.text(67, 168, s["sub"], 23, AN_SUB)
+    c.saveState()                                                   # 꼬리말: 요약 쪽(draw_footer)과 같은 선·글자 크기·위치
+    c.setStrokeColor(colors.HexColor("#D1D5DB"))
+    c.line(W_MARGIN_X, 12 * mm, WIDE_W - W_MARGIN_X, 12 * mm)
+    c.restoreState()
+    fy, fs = (WIDE_H - 8 * mm) / D.K, 7.5 / D.K
+    foot = (f"{name} 고객님 " if name else "") + f"보장분석 요약 · {basis} 기준 · 보험금 지급 근거 아님, 약관·증권 우선"
+    D.text(W_MARGIN_X / D.K, fy, foot, fs, AN_GRAY)
+    D.text((WIDE_W - W_MARGIN_X) / D.K, fy, f"{n} / {N}", fs, AN_GRAY, align="R")
+    draw_tall(c)
+
+
+def _draw_slide(D, s, n, N, ctx):
+    _slide_frame(D, s, n, N, ctx.get("name", ""), ctx.get("basis", ""))
+    k = s["kind"]
+    if k == "summary":
+        for i, (lab, val, tc, bc, desc) in enumerate(s["cards"]):
+            x = 67 + i * 453
+            D.box(x, 200, 416, 184, fill=AN_CARD, stroke=AN_CARD_LINE, r=10, lw=2)
+            D.box(x + 30, 235, 14, 14, fill=bc, r=7)
+            D.text(x + 52, 250, lab, 17, "#374151")
+            xe = D.text(x + 30, 322, str(val), 66, tc, True)
+            D.text(xe + 4, 322, "개", 30, tc, True)
+            D.para(x + 30, 356, 360, [(desc, False)], 15, "#374151")
+        D.text(67, 452, "보장 상태", 16, "#1F2937", True)
+        vmax = max(20, _nice_max(max(b[1] for b in s["bars"])))
+        D.hbars(67, 470, 770, [(a, b_, c_, t_) for a, b_, c_, t_ in s["bars"]], vmax, 2 if vmax <= 20 else 5, "항목 수 (개)", 90, 40, 18)
+        D.box(918, 408, 470, 290, fill=AN_BOX, r=12)
+        D.text(950, 505, "분석 인사이트", 27, AN_INK, True)
+        D.para(950, 548, 410, s["insight"], 23, AN_INK, 1.5)
+    elif k in ("diag", "death"):
+        ch = s["chart"]
+        x = D.chip(67, 200, AN_C_NEED, "필요액 (만원)")
+        D.chip(x, 200, AN_C_PREP, "준비액 (만원)")
+        ymax = _nice_max(max(ch["need"] + ch["prep"]))
+        D.vbars(67, 262, 790, 230, ch["cats"], [("필요", AN_C_NEED, ch["need"]), ("준비", AN_C_PREP, ch["prep"])], ymax, ch["xlabel"])
+        if k == "diag":
+            D.text(932, 235, "진단 항목", 19, AN_INK, True)
+            D.text(1130, 235, "부족 금액", 19, AN_INK, True)
+            D.line(918, 252, 1388, 252, "#BFC5CF", 2)
+            for i, (a, b_) in enumerate(s["table"]):
+                yy = 290 + i * 42
+                D.text(932, yy, a, 19, AN_INK, True)
+                D.text(1130, yy, b_, 19, AN_T_NONE if i < 2 else AN_T_LOW, i < 2)
+                D.line(918, yy + 14, 1388, yy + 14, "#E1E5EB", 1.5)
+            D.para(918, 290 + len(s["table"]) * 42 + 52, 470, [(s["note"], False)], 16, AN_GRAY, 1.5)
+        else:
+            D.text(932, 235, "구분", 19, AN_INK, True)
+            D.text(1112, 235, "준비/필요", 19, AN_INK, True)
+            D.text(1272, 235, "준비율", 19, AN_INK, True)
+            D.line(918, 252, 1388, 252, "#BFC5CF", 2)
+            for i, (a, b_, r_) in enumerate(s["table"]):
+                yy = 290 + i * 52
+                D.text(932, yy, a, 19, AN_INK, True)
+                D.text(1112, yy, b_, 18, AN_INK)
+                D.text(1272, yy, r_, 19, AN_C_PREP, True)
+                D.line(918, yy + 18, 1388, yy + 18, "#E1E5EB", 1.5)
+            D.para(918, 290 + len(s["table"]) * 52 + 62, 470, [(s["note"], False)], 16, AN_GRAY, 1.5)
+    elif k == "chemo":
+        ch = s["chart"]
+        x = D.chip(67, 200, AN_C_NEED, "필요액 (만원)")
+        D.chip(x, 200, AN_C_PREP, "준비액 (만원)")
+        D.vbars(67, 262, 790, 230, ch["cats"], [("필요", AN_C_NEED, ch["need"]), ("준비", AN_C_PREP, ch["prep"])], _nice_max(max(ch["need"])), ch["xlabel"])
+        for i, (nm, l1, l2, col) in enumerate(s["cards"][:3]):
+            y0 = 192 + i * 150
+            D.box(918, y0, 470, 132, fill="#FFFFFF", stroke=AN_CARD_LINE, r=10, lw=2)
+            D.text(942, y0 + 38, nm, 16, "#4B5563")
+            D.text(942, y0 + 78, l1, 25, AN_INK)
+            D.text(942, y0 + 112, l2, 16, col, True)
+    elif k == "uncovered":
+        D.text(67, 235, "미보장 항목", 16, "#1F2937", True)
+        rows = []
+        pal = [AN_C_NONE, AN_C_NEED, "#2B4A86", "#40629E", "#5F7FB5", "#86A0C9", "#A9BDDA"]
+        for i, (nm, v) in enumerate(s["bars"][:7]):
+            rows.append((nm, v, pal[min(i, len(pal) - 1)]))
+        vmax = _nice_max(max(v for _, v, _ in rows))
+        D.hbars(67, 250, 790, rows, vmax, vmax / 8, "필요액 (만원, 준비액 0원)", 150, 34, 14, show_val=False)
+        D.box(918, 196, 470, 400, fill=AN_BOX, r=12)
+        D.text(950, 262, "주요 공백 리스크", 27, AN_INK, True)
+        yy = D.para(950, 308, 410, s["insight1"], 22, AN_INK, 1.5)
+        D.line(950, yy - 10, 1356, yy - 10, "#D5DAE2", 3)
+        D.para(950, yy + 34, 410, s["insight2"], 22, AN_INK, 1.5)
+    elif k == "stable":
+        for i, cd in enumerate(s["cards"]):
+            x = 67 + i * 453
+            D.box(x, 200, 416, 290, fill="#FFFFFF", stroke=AN_CARD_LINE, r=10, lw=2)
+            D.text(x + 30, 238, cd["badge"], 16, AN_T_OK, True)
+            D.text(x + 30, 278, cd["title"], 24, AN_INK, True)
+            yy = 316
+            for (lab, p, nd) in cd["lines"]:
+                D.para(x + 30, yy, 360, [(lab + " ", False), (f"{p}만원", True), (f" (필요 {nd})", False)], 17, AN_INK, 1.3)
+                yy += 28
+            if cd["more"] > 0:
+                D.text(x + 30, yy, f"외 {cd['more']}개", 15, AN_GRAY)
+            D.text(x + 30, 470, cd["foot"], 14, AN_GRAY)
+        D.box(67, 512, 1321, 100, fill=AN_BOX, r=10)
+        D.para(95, 554, 1260, s["point"], 22, AN_INK, 1.45)
+    elif k == "ages":
+        ch = s["chart"]
+        D.text(67, 235, ch["title"], 17, "#1F2937", True)
+        pal = [AN_C_NEED, "#2B4A86", "#40629E", "#86A0C9", "#A9BDDA"]
+        D.vbars(67, 252, 790, 250, ch["cats"], [("v", pal[0], ch["vals"])], _nice_max(max(ch["vals"])), ch["xlabel"])
+        for i, cd in enumerate(s["cards"][:3]):
+            y0 = 192 + i * 130
+            D.box(918, y0, 470, 112, fill="#FFFFFF", stroke=AN_CARD_LINE, r=10, lw=2)
+            D.text(942, y0 + 34, cd["title"], 16, "#4B5563")
+            D.text(942, y0 + 68, cd["l1"], 21, AN_INK)
+            D.text(942, y0 + 98, cd["l2"], 21, AN_INK, True)
+    elif k == "area":
+        D.text(67, 235, "영역별 준비율 (필요액 초과분 제외)", 16, "#1F2937", True)
+        lw_, px0 = 110, 67 + 110
+        D.hbars(67, 250, 790, [(a_, v_, c_) for a_, v_, c_, _, _ in s["bars"]], 100, 25, "준비율 (%) · 100% = 필요액", lw_, 34, 14, show_val=False)
+        pw_ = 790 - lw_
+        for i, (nm, v_, col_, tcol, lab) in enumerate(s["bars"]):
+            by = 250 + 20 + i * 48
+            bw = max(8.0, (pw_ - 20) * v_ / 100)
+            if bw >= 110:
+                D.text(px0 + 10 + bw - 12, by + 23, lab, 15, tcol, align="R")
+            else:
+                D.text(px0 + 10 + bw + 10, by + 23, lab, 15, "#111111")
+        rows_ = s["rows"]
+        D.box(918, 196, 470, 130 + max(len(rows_), 1) * 40 + 90, fill=AN_BOX, r=12)
+        D.text(950, 240, "함께 확인할 부족 항목", 24, AN_INK, True)
+        D.text(950, 282, "항목", 16, AN_GRAY, True)
+        D.text(1262, 282, "준비 / 필요", 16, AN_GRAY, True, "R")
+        D.text(1356, 282, "준비율", 16, AN_GRAY, True, "R")
+        D.line(950, 292, 1356, 292, "#D5DAE2", 2)
+        for i, (a_, b_, r_) in enumerate(rows_):
+            yy = 326 + i * 40
+            D.text(950, yy, a_, 18, AN_INK, True)
+            D.text(1262, yy, b_, 18, AN_INK, align="R")
+            D.text(1356, yy, f"{min(_rhu(r_), 99)}%", 18, AN_T_NONE if r_ < AN_RED_BELOW else AN_T_LOW, True, "R")
+            D.line(950, yy + 12, 1356, yy + 12, "#D5DAE2", 1)
+        if not rows_:
+            D.para(950, 326, 410, [("다른 슬라이드에서 다루지 않은 부족 항목은 없어요.", False)], 20, AN_INK)
+        D.para(950, 326 + max(len(rows_), 1) * 40 + 14, 410, [(s["note"], False)], 14, AN_GRAY, 1.4)
+    elif k == "plan":
+        for i, (t, dsc, _) in enumerate(s["steps"][:3]):
+            y0 = 196 + i * 124
+            D.box(67, y0, 921, 108, fill="#FFFFFF", stroke=AN_CARD_LINE, r=10, lw=2)
+            D.box(91, y0 + 20, 40, 40, fill=AN_C_NEED, r=8)
+            D.text(111, y0 + 49, str(i + 1), 24, "#FFFFFF", True, "C")
+            D.text(148, y0 + 48, t, 28, AN_INK, True)
+            D.text(148, y0 + 88, dsc, 21, AN_SUB)
+        yb = 196 + min(3, len(s["steps"])) * 124
+        D.box(67, yb, 921, 124, fill="#EEF2F8", r=10)
+        D.para(150, yb + 48, 810, s["caution"], 22, AN_INK, 1.45)
+        pg = ImageReader(io.BytesIO(embedded_png("penguin")))
+        pw0, ph0 = embedded_pil("penguin").size
+        pw = 380
+        D.c.drawImage(pg, D.X(1010), D.Y(250 + pw * ph0 / pw0 + 60), pw * D.K, pw * ph0 / pw0 * D.K, mask="auto")
+
+
+def analysis_path(out):
+    out = Path(out)
+    stem = out.stem[:-3] if out.stem.endswith("_요약") else out.stem
+    return out.with_name(stem + "_분석.pdf")
+
+
+def verify_analysis(path, slides, offset=0):
+    """분석 쪽 검사: 쪽 수·16:9 와, 원본에서 그대로 인용한 값이 해당 쪽에 모두 나오는지 확인한다. 빠지면 오류로 멈춘다.
+    offset = 분석 쪽 앞에 있는 쪽 수(요약 PDF 안에 붙인 경우 원본 쪽 수, 별도 파일이면 0)."""
+    with pdfplumber.open(str(path)) as pdf:
+        pages = pdf.pages[offset:]
+        if len(pages) != len(slides):
+            raise RuntimeError(f"분석 쪽 수({len(pages)})가 슬라이드 수({len(slides)})와 다릅니다.")
+        for k_, (pg, s) in enumerate(zip(pages, slides), 1):
+            if abs(pg.width / pg.height - 16 / 9) > 0.01:
+                raise RuntimeError(f"분석 {k_}쪽이 16:9 가 아닙니다.")
+            txt = pg.extract_text() or ""
+            miss = [q for q in s["quotes"] if q not in txt]
+            if miss:
+                raise RuntimeError(f"분석 {k_}쪽(전체 {offset + k_}쪽, {s['label']}) 검사 실패: 원본 값 {miss} 가 쪽에 없습니다.")
+    where = f"요약 PDF {offset + 1}~{offset + len(slides)}쪽" if offset else "분석 PDF"
+    print(f"[검사] {where} 분석 {len(slides)}쪽 16:9·원본 인용 값 {sum(len(s['quotes']) for s in slides)}개 대조 일치")
+
+
+def build_analysis_pdf(entries, ctx, out_path):
+    from reportlab.pdfgen import canvas as rl_canvas
+    slides = analysis_slides(entries, ctx)
+    if not slides:
+        print("[분석] 분석할 상품별 분석 데이터가 없어 분석 PDF 를 만들지 않았습니다.")
+        return None
+    c = rl_canvas.Canvas(str(out_path), pagesize=(WIDE_W, WIDE_H))
+    c.setTitle(f"{ctx.get('name', '')} 고객님 보장분석 정리")
+    D = Deck(c)
+    for n, s in enumerate(slides, 1):
+        _draw_slide(D, s, n, len(slides), ctx)
+        c.showPage()
+    c.save()
+    verify_analysis(out_path, slides)
+    return slides
 
 
 # ----------------------------------------------------------------------------
@@ -19652,8 +20465,16 @@ class App:
         self.btn_out = ttk.Button(frm, text="저장 위치...", command=self.pick_out)
         self.btn_out.grid(row=2, column=2, padx=(8, 0), pady=(8, 0))
 
-        self.chk = ttk.Checkbutton(frm, text="모든 쪽을 범용 요약으로 만들기 (점검용)", variable=self.gen_var)
-        self.chk.grid(row=3, column=1, sticky="w", pady=(8, 0))
+        opt = ttk.Frame(frm)
+        opt.grid(row=3, column=1, sticky="w", pady=(8, 0))
+        self.chk = ttk.Checkbutton(opt, text="모든 쪽을 범용 요약으로 만들기 (점검용)", variable=self.gen_var)
+        self.chk.pack(side="left")
+        self.ana_var = tk.BooleanVar(value=True)
+        self.chk2 = ttk.Checkbutton(opt, text="분석 쪽을 요약 PDF 끝에 넣기", variable=self.ana_var)
+        self.chk2.pack(side="left", padx=(16, 0))
+        self.sep_var = tk.BooleanVar(value=False)
+        self.chk3 = ttk.Checkbutton(opt, text="분석 PDF 따로도 저장", variable=self.sep_var)
+        self.chk3.pack(side="left", padx=(16, 0))
 
         bar = ttk.Frame(frm)
         bar.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(12, 8))
@@ -19698,7 +20519,7 @@ class App:
     def set_busy(self, busy):
         self.running = busy
         state = "disabled" if busy else "normal"
-        for w in (self.btn_pick, self.btn_out, self.btn_run, self.chk):
+        for w in (self.btn_pick, self.btn_out, self.btn_run, self.chk, self.chk2, self.chk3):
             w.configure(state=state)
         if busy:
             self.progress.start(12)
@@ -19768,13 +20589,13 @@ class App:
         self.result = None
         self.status_var.set("변환 중입니다...")
         self.set_busy(True)
-        threading.Thread(target=self._worker, args=(src, out, self.gen_var.get()), daemon=True).start()
+        threading.Thread(target=self._worker, args=(src, out, self.gen_var.get(), self.ana_var.get(), self.sep_var.get()), daemon=True).start()
 
-    def _worker(self, src, out, generic):
+    def _worker(self, src, out, generic, analysis=True, separate=False):
         try:
             with contextlib.redirect_stdout(_QueueWriter(self.q)):
-                n_out, n_src = convert(src, out, generic)
-            self.q.put(("done", (out, n_out, n_src)))
+                n_out, n_src, n_ana, n_drop = convert(src, out, generic, analysis, separate)
+            self.q.put(("done", (out, n_out, n_src, n_ana, n_drop)))
         except Exception as ex:                                    # 어떤 오류든 창에 보여 준다
             self.q.put(("log", traceback.format_exc()))
             self.q.put(("error", ex))
@@ -19793,19 +20614,22 @@ class App:
             pass
         self.root.after(100, self._poll)
 
-    def _on_done(self, out, n_out, n_src):
+    def _on_done(self, out, n_out, n_src, n_ana=0, n_drop=0):    # n_src = 원본 쪽 수 - 대체한 쪽 수 (요약 쪽 기대 수)
         self.set_busy(False)
         self.finished = True
         self.result = Path(out)
         for w in (self.btn_open, self.btn_folder):
             w.configure(state="normal")
-        same = (n_out is None) or (n_out == n_src)
-        self.status_var.set(f"완료: 원본 {n_src}쪽 → 요약 {n_out if n_out is not None else '?'}쪽  |  {out}")
+        n_sum = None if n_out is None else n_out - n_ana           # 분석 쪽을 뺀 요약 쪽수
+        same = (n_sum is None) or (n_sum == n_src)
+        extra = f" + 분석 {n_ana}쪽" if n_ana else ""
+        cut = f" (분석으로 대체한 {n_drop}쪽 제외)" if n_drop else ""
+        self.status_var.set(f"완료: 원본 {n_src + n_drop}쪽 → 요약 {n_sum if n_sum is not None else '?'}쪽{extra}{cut}  |  {out}")
         if same:
-            if messagebox.askyesno("완료", f"요약 PDF를 만들었습니다. ({n_src}쪽)\n{out}\n\n지금 열어 볼까요?"):
+            if messagebox.askyesno("완료", f"요약 PDF를 만들었습니다. (요약 {n_src}쪽{extra}{cut})\n{out}\n\n지금 열어 볼까요?"):
                 self.open_result()
         else:
-            messagebox.showwarning("쪽수 확인", f"원본 {n_src}쪽, 요약 {n_out}쪽으로 쪽수가 다릅니다.\n로그를 확인하세요.")
+            messagebox.showwarning("쪽수 확인", f"요약 {n_src}쪽이 되어야 하는데 {n_sum}쪽입니다.\n로그를 확인하세요.")
 
     def _on_error(self, ex):
         self.set_busy(False)
@@ -19840,6 +20664,8 @@ def run_gui():
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     force_generic = "--generic" in sys.argv
+    make_analysis = "--no-analysis" not in sys.argv
+    separate_analysis = "--separate-analysis" in sys.argv
     if not args:                                      # 인자가 없으면 PDF 선택 창을 연다
         if tk is None:
             print("tkinter를 사용할 수 없어 창을 열 수 없습니다. 명령줄로 PDF 경로를 지정하세요.\n")
@@ -19849,7 +20675,7 @@ def main():
         return
     src = Path(args[0])
     out = Path(args[1]) if len(args) > 1 else src.with_name(src.stem + "_요약.pdf")
-    convert(src, out, force_generic)
+    convert(src, out, force_generic, make_analysis, separate_analysis)
 
 
 if __name__ == "__main__":
