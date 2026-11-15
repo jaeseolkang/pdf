@@ -1,4 +1,4 @@
-# 2026-11-15 23:50 KST | 수정: 스퀘어 엠블럼을 체크리스트 그림(옅은 톤) 배경 + 교보 로고를 종이처럼 눕힌 디자인으로 교체, 체크리스트 그림 내장·처리 코드화 (APP_VERSION 1.16) | 이전: tall 모든 쪽 적용(1.15)
+# 2026-11-15 22:00 KST | 수정: 표로 표현할 수 있는 쪽(세대 분석·상품별 분석·연령별 분석·표가 있는 범용 쪽)을 보험 가입 현황과 같은 형식(작은 제목·큰 제목 문장·설명·카드·목록 표)으로 통일 (APP_VERSION 1.17) | 이전: 스퀘어 엠블럼 새 디자인(1.16)
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -73,6 +73,10 @@
       표지와 똑같은 모양·크기로 모든 쪽 오른쪽 끝에 넣는다. (draw_tall, 끄려면 TALL_SHOW_ON_PAGES = False)
   14) [동일 작업] 이 파일을 고칠 때 이미 정해진 양식·이미지 처리 값(보험 가입 현황 양식, 스퀘어 엠블럼, tall, 신체부위별 선)은
       md 「3·3-2·3-3·3-4·5」 의 규칙·고정값과 같게 유지한다. 새로 정한 것은 md 에 규칙으로 먼저 적고, 코드의 상수를 그 값에 맞춘다.
+  15) [표 쪽 공통 양식] 표로 표현할 수 있는 데이터(세대 분석, 상품별 분석, 연령별 분석, 표가 있는 범용 쪽)는 항상 보험 가입 현황과 같은 형식으로 만든다.
+      작은 제목(+고객명·원본 쪽) → 큰 제목 문장 → 한 줄 설명 → 카드 2~3개 → 목록 표(머리줄 아래 굵은 회색 선, 행 사이 옅은 선, 숫자 오른쪽 정렬). (table_page, list_table)
+      표 열이 TP_EMBLEM_MAX_COLS 이하면 본문 2/3 + 스퀘어 엠블럼 1/3, 더 넓으면 쪽 전체 폭. 긴 표(세대 분석)는 같은 높이의 좌우 두 표로 나눈다.
+      제목·설명·카드 글은 이 양식에 맞춰 해요체, 숫자는 원본 문자열 그대로이며 결과 PDF 에서 다시 대조한다. (verify_table_values)
 
 설치
   pip install pdfplumber reportlab
@@ -122,7 +126,7 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.16"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.17"        # 이 파일을 수정할 때마다 올린다
 
 # ----------------------------------------------------------------------------
 # 0. 내장 이미지 — 업로드한 원본 파일 4개를 base64 PNG 로 이 파일 안에 담았다. (별도 이미지 파일 불필요)
@@ -15081,6 +15085,14 @@ def build_styles():
     S["en_th"] = ParagraphStyle("en_th", fontName=FONT_B, fontSize=10.5, leading=15, textColor=colors.HexColor("#1F2937"))
     S["en_td"] = ParagraphStyle("en_td", fontName=FONT, fontSize=11.5, leading=17.5, textColor=colors.HexColor("#1F2937"))
     S["en_note"] = ParagraphStyle("en_note", fontName=FONT, fontSize=8.5, leading=12, textColor=colors.HexColor("#6B7280"))
+    S["tp_title"] = ParagraphStyle("tp_title", fontName=FONT_B, fontSize=TP_TITLE_PT, leading=TP_TITLE_PT * 1.3,
+                                   textColor=colors.HexColor("#111827"))
+    S["tp_sub"] = ParagraphStyle("tp_sub", fontName=FONT, fontSize=TP_SUB_PT, leading=TP_SUB_PT * 1.5,
+                                 textColor=colors.HexColor("#4B5563"))
+    S["tp_card_l"] = ParagraphStyle("tp_card_l", fontName=FONT, fontSize=8.5, leading=11.5, textColor=colors.HexColor("#4B5563"))
+    S["tp_card_v"] = ParagraphStyle("tp_card_v", fontName=FONT_B, fontSize=14, leading=TP_CARD_VALUE_PT * 1.3,
+                                    textColor=colors.HexColor("#111827"))
+    S["tp_card_s"] = ParagraphStyle("tp_card_s", fontName=FONT, fontSize=8, leading=11, textColor=colors.HexColor("#6B7280"))
     S["cover_sub"] = ParagraphStyle("cover_sub", fontName=FONT, fontSize=15, leading=22, textColor=INK)
     S["cover_title"] = ParagraphStyle("cover_title", fontName=FONT_B, fontSize=30, leading=38, textColor=NAVY,
                                       spaceAfter=6)
@@ -15475,12 +15487,11 @@ def grid_table(head_n, rows, width=None):
         if i > head_n and r[0] and r[0] == rows[i - 1][0]:      # 앞 행과 같은 구분 값은 한 번만 표시
             r = [""] + r[1:]
         if i < head_n:
-            data.append([cell(esc(v), size, 1, True, colors.white) for v in r])
+            data.append([cell(esc(v), size, 1, True, INK) for v in r])
         else:
             data.append([cell(esc(v), size, 2 if (_is_num(v) or v == "-") else 0, j == 0) for j, v in enumerate(r)])
     t = Table(data, colWidths=widths, repeatRows=head_n)
-    t.setStyle(TableStyle(_BASE_STYLE + [("BACKGROUND", (0, 0), (-1, head_n - 1), NAVY),
-                                         ("ROWBACKGROUNDS", (0, head_n), (-1, -1), [colors.white, LIGHT])]))
+    t.setStyle(TableStyle(list_table_style() + [("LINEBELOW", (0, head_n - 1), (-1, head_n - 1), 1.0, TP_HEAD_LINE)]))
     return t
 
 
@@ -15515,6 +15526,20 @@ def generic_items(page):
 
 def story_generic(e):
     rest, grids, unit = generic_items(e["page"])
+    if grids:                                                # 표가 있는 쪽은 표 쪽 공통 양식(보험 가입 현황과 같은 형식)
+        nt = _nos(e["title"])
+        rest = [l for l in rest if _nos(l) not in nt and nt not in _nos(l)]
+        if len(rest) > 40:
+            rest = [" · ".join(esc(x) for x in rest[i:i + 6]) for i in range(0, len(rest), 6)]
+        else:
+            rest = [esc(x) for x in rest]
+
+        def body(W):
+            out = [Paragraph(c, S["gen"], bulletText="•") for c in rest]
+            for head_n, rows in grids:
+                out += [Spacer(1, 5), grid_table(head_n, rows, W)]
+            return out
+        return table_page(e["n"], "내용 정리", e["title"], f"단위: {unit}" if unit else "원본의 표를 그대로 옮겼어요.", [], body)
     st = page_header(e["title"], e["n"], f"단위: {unit}" if unit else "", WCW)
     nt = _nos(e["title"])
     rest = [l for l in rest if _nos(l) not in nt and nt not in _nos(l)]      # 쪽 제목과 같은 줄은 제외
@@ -19029,20 +19054,152 @@ def story_enrollment(d, src, name):
 
 
 
+# ----------------------------------------------------------------------------
+# 5-B. 표 쪽 공통 양식 — 표로 표현할 수 있는 데이터는 항상 '보험 가입 현황'과 같은 형식으로 만든다.
+#   작은 제목(+고객명·원본 쪽) → 큰 제목 문장 → 한 줄 설명 → 카드 2~3개 → 목록 표
+#   목록 표 모양(머리줄 아래 굵은 회색 선·행 사이 옅은 선·숫자 오른쪽 정렬)은 보험 가입 현황의 목록과 같다.
+#   표 열이 적으면(TP_EMBLEM_MAX_COLS 이하) 본문 2/3 + 오른쪽 1/3 스퀘어 엠블럼, 넓으면 쪽 전체 폭.
+# ----------------------------------------------------------------------------
+TP_NAME = "표 쪽 공통 양식"
+TP_TITLE_PT = 18                 # 큰 제목 글자 크기 (보험 가입 현황은 25pt — 표 쪽은 표 공간 때문에 줄였다)
+TP_SUB_PT = 10                   # 한 줄 설명 글자 크기
+TP_CARD_VALUE_PT = 18            # 카드 큰 숫자 크기
+TP_TH_PT = 8.5                   # 목록 표 머리글 크기
+TP_TD_PT = 7.6                     # 목록 표 본문 크기
+TP_ROW_PAD = 1.2                 # 목록 표 행 위·아래 여백(pt)
+TP_EMBLEM_MAX_COLS = 6           # 표 열이 이 값 이하면 본문 2/3 + 스퀘어 엠블럼
+TP_HEAD_LINE = colors.HexColor("#BFC5CF")      # 머리줄 아래·구분 시작 선 (보험 가입 현황 목록과 같은 색)
+TP_ROW_LINE = colors.HexColor("#E1E5EB")       # 행 사이 선 (보험 가입 현황 목록과 같은 색)
+
+
+def wfit(weights, width):
+    tot = float(sum(weights))
+    return [width * w / tot for w in weights]
+
+
+def list_table_style():
+    """보험 가입 현황 목록과 같은 표 모양: 머리줄 아래 굵은 선, 행 사이 옅은 선, 배경색·바깥 테두리 없음."""
+    return [("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 4), ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), TP_ROW_PAD), ("BOTTOMPADDING", (0, 0), (-1, -1), TP_ROW_PAD),
+            ("LINEBELOW", (0, 0), (-1, 0), 1.0, TP_HEAD_LINE), ("LINEBELOW", (0, 1), (-1, -1), 0.5, TP_ROW_LINE)]
+
+
+def list_table(head, rows, widths, aligns=None, size=None, spans=None):
+    """보험 가입 현황 목록 모양의 표. spans = [(시작행, 끝행)] 이면 첫 열(구분)을 그 행들에 걸쳐 병합한다."""
+    size = size or TP_TD_PT
+    n = len(head)
+    aligns = aligns or [0] * n
+    data = [[cell(h, max(size, TP_TH_PT) if size >= TP_TD_PT else size, aligns[j], True, INK) for j, h in enumerate(head)]]
+    for r in rows:
+        data.append([cell(v, size, aligns[j], bold=(bool(spans) and j == 0)) for j, v in enumerate(r)])
+    t = Table(data, colWidths=widths, repeatRows=1, hAlign="LEFT")
+    st = list_table_style()
+    for a, b in (spans or []):
+        if b > a:
+            st.append(("SPAN", (0, a + 1), (0, b + 1)))
+        st.append(("VALIGN", (0, a + 1), (0, b + 1), "TOP"))
+        if a > 0:
+            st.append(("LINEABOVE", (0, a + 1), (-1, a + 1), 0.9, TP_HEAD_LINE))
+    t.setStyle(TableStyle(st))
+    return t
+
+
+class CompactCard(InfoCard):
+    """표 쪽용 카드 — 보험 가입 현황 카드와 같은 모양(둥근 테두리: 이름 / 큰 숫자+단위 / 보조 설명)을 작게."""
+    PAD = 2.6 * mm
+
+    def natural(self):
+        iw = self.width - 2 * self.PAD
+        return sum(p.wrap(iw, 1000)[1] for p in self.parts) + 2 * self.PAD
+
+    def __init__(self, label, value, unit, sub, width):
+        Flowable.__init__(self)
+        self.width = width
+        self.parts = [Paragraph(esc(label), S["tp_card_l"]),
+                      Paragraph(f'<font size="{TP_CARD_VALUE_PT}"><b>{esc(value)}</b></font><font size="11">{esc(unit)}</font>',
+                                S["tp_card_v"])]
+        if sub:
+            self.parts.append(Paragraph(esc(sub), S["tp_card_s"]))
+        self.fixed_h = None
+
+
+def tp_cards(cards, width, gap=5 * mm):
+    """cards = [(이름, 값, 단위, 보조 설명)] 2~3개를 같은 높이로 나란히."""
+    n = len(cards)
+    cw = (width - gap * (n - 1)) / n
+    cs = [CompactCard(l, v, u, sb, cw) for (l, v, u, sb) in cards]
+    h = max(c.natural() for c in cs)
+    row, widths = [], []
+    for i, c in enumerate(cs):
+        c.fixed_h = h
+        if i:
+            row.append("")
+            widths.append(gap)
+        row.append(c)
+        widths.append(cw)
+    t = Table([row], colWidths=widths, hAlign="LEFT")
+    t.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                           ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+    return t
+
+
+def side_by_side(left, right, width, gap=6 * mm):
+    hw = (width - gap) / 2
+    t = Table([[left, "", right]], colWidths=[hw, gap, hw], hAlign="LEFT")
+    t.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                           ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                           ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    return t
+
+
+def table_page(src, small, title, subtitle, cards, body_fn, emblem=False, notes=()):
+    """표 쪽 공통 양식. body_fn(W) → 본문 폭 W 에 맞춘 표 등 flowable 목록.
+    emblem=True 이면 보험 가입 현황과 같이 본문 2/3 + 오른쪽 1/3 스퀘어 엠블럼, False 이면 쪽 전체 폭."""
+    W = (CW * ENROLL_BODY_RATIO - ENROLL_GAP) if emblem else CW
+    tag = (f"{CUSTOMER_NAME} 고객님 · " if CUSTOMER_NAME else "") + f"원본 p.{src}"
+    top = Table([[Paragraph(esc(small), S["en_small"]), Paragraph(esc(tag), S["en_tag"])]], colWidths=[W - 60 * mm, 60 * mm], hAlign="LEFT")
+    top.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                             ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                             ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    st = [top, Spacer(1, 1.5 * mm), Paragraph(esc(title), S["tp_title"]), Spacer(1, 0.5 * mm),
+          Paragraph(esc(subtitle), S["tp_sub"]), Spacer(1, 2.5 * mm)]
+    if cards:
+        st += [tp_cards(cards, W), Spacer(1, 3 * mm)]
+    st += list(body_fn(W))
+    for n_ in notes:
+        st += [Spacer(1, 2 * mm), Paragraph(esc(n_), S["en_note"])]
+    if not emblem:
+        return st
+    body_h = natural_height(st, W)
+    panel = SquareEmblem(CW * (1 - ENROLL_BODY_RATIO), max(body_h, ENROLL_PANEL_MIN_H))
+    outer = Table([[st, panel]], colWidths=[CW * ENROLL_BODY_RATIO, CW * (1 - ENROLL_BODY_RATIO)], hAlign="LEFT")
+    outer.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (0, 0), ENROLL_GAP),
+                               ("RIGHTPADDING", (1, 0), (1, 0), 0), ("TOPPADDING", (0, 0), (-1, -1), 0),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 0), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    return [outer]
+
+
 def story_generation(d, src):
     cnt, members = d["counts"], d["members"]
-    st = page_header("세대 분석", src, "구성원별 준비 금액 · 단위: 만원")
-    if cnt:
-        st.append(data_table(["구분", "전체", "교보생명", "생명보험", "손해보험", "공제/우체국"],
-                             [["유지계약"] + [f"{cnt[k]}건" for k in ("total", "kyobo", "life", "nonlife", "mutual")]],
-                             fit([26, 30, 30, 30, 30, 30]), aligns=[1] * 6, size=8))
-        st.append(Spacer(1, 6))
-    ra, sa = grouped_rows(GROUPS_A, lambda i, l: [esc(m["a"][i]) for m in members])
-    rb, sb = grouped_rows(GROUPS_B, lambda i, l: [esc(m["b"][i]) for m in members], start=len(ra))
+    n = len(members)
+    names = "·".join(m["name"] for m in members)
     head = ["구분", "항목"] + [f"{esc(m['name'])}<br/>({m['age']}세)" for m in members]
-    wid = [22, 34] + [122 / len(members)] * len(members)
-    st.append(data_table(head, ra + rb, fit(wid), aligns=[0, 0] + [2] * len(members), size=7.5, spans=sa + sb))
-    return st
+    ra, sa = grouped_rows(GROUPS_A, lambda i, l: [esc(m["a"][i]) for m in members])
+    rb, sb = grouped_rows(GROUPS_B, lambda i, l: [esc(m["b"][i]) for m in members])
+
+    def body(W):                                             # 긴 표라서 같은 높이의 좌우 두 표로 나눈다 (사망·진단 | 그 밖)
+        wd = wfit([17, 25] + [58.0 / n] * n, (W - 6 * mm) / 2)
+        al = [0, 0] + [2] * n
+        return [side_by_side(list_table(head, ra, wd, al, spans=sa), list_table(head, rb, wd, al, spans=sb), W)]
+    cards = []
+    if cnt:
+        sub = " · ".join(f"{lab} {cnt[k]}건" for lab, k in (("교보생명", "kyobo"), ("생명보험", "life"),
+                                                           ("손해보험", "nonlife"), ("공제/우체국", "mutual")))
+        cards.append(("유지 계약", cnt["total"], "건", sub))
+    cards.append(("분석 구성원", str(n), "명", ", ".join(f"{m['name']} ({m['age']}세)" for m in members)))
+    title = (f"유지 계약 {cnt['total']}건, " if cnt else "") + f"{names} 고객님의 보장 준비 금액이에요"
+    return table_page(src, "세대 분석", title, "가족 구성원별로 각 보장항목이 얼마나 준비되어 있는지 정리했어요. (단위: 만원)",
+                      cards, body, emblem=False)
 
 
 def story_products(d, src, title, labels, groups):
@@ -19050,34 +19207,42 @@ def story_products(d, src, title, labels, groups):
     need, prep, short = d["need"], d["prep"], d["short"]
     stat = [status_of(prep[i], short[i]) for i in range(n)]
     cnt = {k: stat.count(k) for k in ("적정", "부족", "미보장")}
-    st = page_header(title, src, "단위: 만원")
-    if d["head"]:
-        h = d["head"]
-        st.append(kpi([("분석항목(전체)", f"{h['total']}개"), ("적정보장", f"{h['ok']}개", C_OK),
-                       ("부족보장", f"{h['low']}개", C_LOW), ("미보장", f"{h['none']}개", C_NONE)]))
+    h = d["head"]
+    if h:
+        scope, total, ok, low, none = "전체", h["total"], h["ok"], h["low"], h["none"]
     else:
-        st.append(kpi([("이 쪽 분석항목", f"{n}개"), ("적정보장", f"{cnt['적정']}개", C_OK),
-                       ("부족보장", f"{cnt['부족']}개", C_LOW), ("미보장", f"{cnt['미보장']}개", C_NONE)]))
-    st.append(Spacer(1, 6))
+        scope, total, ok, low, none = "이 쪽", str(n), str(cnt["적정"]), str(cnt["부족"]), str(cnt["미보장"])
     shown = [(k, p) for k, p in enumerate(d["products"], 1) if any(v != "-" for v in p["vals"])]
     m = len(shown)
-    fixed = [16, 27, 14, 14, 14, 13]
-    pw = max(min((178 - sum(fixed)) / m, 15), 6) if m else 0
-    size = num_size(pw) if m else 7.5
-    head = ["구분", "항목", "필요", "준비", "부족", "상태"] + [str(k) for k, _ in shown]
-    rows, spans = grouped_rows(groups, lambda i, l: [esc(need[i]), esc(prep[i]), esc(short[i])])
-    for i, r in enumerate(rows):
-        r.insert(5, status_cell(stat[i]))
-        r.extend(esc(p["vals"][i]) for _, p in shown)
-    st.append(data_table(head, rows, fit(fixed + [pw] * m), aligns=[0, 0, 2, 2, 2, 1] + [2] * m, size=size,
-                         spans=spans))
-    if shown:
-        st.append(Spacer(1, 7))
+
+    def body(W):
+        fixed = [26, 38, 18, 18, 18, 16]
+        pw = max(min((269 - sum(fixed)) / m, 22), 8) if m else 0
+        size = TP_TD_PT if m <= 6 else 7
+        head = ["구분", "항목", "필요", "준비", "부족", "상태"] + [str(k) for k, _ in shown]
+        rows, spans = grouped_rows(groups, lambda i, l: [esc(need[i]), esc(prep[i]), esc(short[i])])
+        for i, r in enumerate(rows):
+            r.insert(5, status_cell(stat[i]))
+            r.extend(esc(p["vals"][i]) for _, p in shown)
+        if not shown:
+            return [list_table(head, rows, wfit(fixed, W), [0, 0, 2, 2, 2, 1], size, spans)]
+        gap = 6 * mm
+        wl = (W - gap) * 0.62                                  # 왼쪽: 항목별 표, 오른쪽: 번호별 상품 목록 (나란히)
+        left = list_table(head, rows, wfit(fixed + [min(pw, 14)] * m, wl), [0, 0, 2, 2, 2, 1] + [2] * m, size, spans)
         prow = [[str(k), esc(p["company"]), esc(p["name"]), p["premium"],
                  esc("종신" if p["expiry"] == "종신" else p["expiry"])] for k, p in shown]
-        st.append(data_table(["번호", "보험사", "상품명", "월보험료", "만기"], prow, fit([10, 30, 76, 28, 24]),
-                             aligns=[1, 0, 0, 2, 1], size=7.5))
-    return st
+        right = list_table(["번호", "보험사", "상품명", "월보험료", "만기"], prow, wfit([8, 18, 40, 20, 12], W - gap - wl),
+                           [1, 0, 0, 2, 1], 7)
+        t = Table([[left, "", right]], colWidths=[wl, gap, W - gap - wl], hAlign="LEFT")
+        t.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                               ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                               ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        return [t]
+    cards = [(f"분석 항목({scope})", total, "개", f"적정 {ok}개 · 부족 {low}개 · 미보장 {none}개"),
+             ("준비된 상품", str(m), "건", " · ".join(short_product(p["name"]) or p["name"] for _, p in shown) or "없음")]
+    return table_page(src, title, f"{scope} {total}개 항목 중 적정 {ok}개, 부족 {low}개, 미보장 {none}개예요",
+                      "필요 금액과 준비 금액을 항목별로 비교하고, 상품별 준비 금액을 함께 보여 줘요. (단위: 만원)",
+                      cards, body, emblem=False)
 
 
 def story_body(d, src):
@@ -19089,19 +19254,18 @@ def story_body(d, src):
             bm = BodyMap(body, min(CW, avail_h * BODY_PIC_W / BODY_PIC_H))
             bm.hAlign = "CENTER"
             return hdr + [bm]
-        except Exception as ex:                              # 그림을 읽지 못하면 표로 대체
+        except Exception as ex:                              # 그림을 읽지 못하면 표(표 쪽 공통 양식)로 대체
             print(f"[주의] 내장 그림을 불러오지 못해 표로 대체합니다: {ex}")
-    st = page_header("신체부위별 보장현황", src, "단위: 만원")
     cnt = {"충분": 0, "부족": 0, "미보장": 0}
     for _, s_ in body.values():
         cnt[s_] += 1
-    st.append(kpi([("충분", f"{cnt['충분']}개", C_OK), ("부족", f"{cnt['부족']}개", C_LOW),
-                   ("미보장", f"{cnt['미보장']}개", C_NONE)]))
-    st.append(Spacer(1, 6))
-    rows, spans = grouped_rows(BODY_GROUPS, lambda i, l: [esc(body[l][0]), status_cell(body[l][1])])
-    st.append(data_table(["구분", "항목", "금액", "상태"], rows, fit([30, 62, 42, 30]), aligns=[0, 0, 2, 1], size=8.5,
-                         spans=spans))
-    return st
+
+    def body_fn(W):
+        rows, spans = grouped_rows(BODY_GROUPS, lambda i, l: [esc(body[l][0]), status_cell(body[l][1])])
+        return [list_table(["구분", "항목", "금액", "상태"], rows, wfit([30, 62, 42, 30], W), [0, 0, 2, 1], 8.5, spans)]
+    cards = [(lab, str(cnt[lab]), "개", "") for lab in ("충분", "부족", "미보장")]
+    return table_page(src, "신체부위별 보장현황", f"{len(body)}개 항목 중 충분 {cnt['충분']}개, 부족 {cnt['부족']}개, 미보장 {cnt['미보장']}개예요",
+                      "신체 부위별로 준비된 보장 금액을 정리했어요. (단위: 만원)", cards, body_fn, emblem=True)
 
 
 def age_groups(rows):
@@ -19115,15 +19279,55 @@ def age_groups(rows):
 
 
 def story_ages(title, src, rows, labels, groups):
-    st = page_header(title, src, "연령별 보장 금액 · 단위: 만원")
     ag = age_groups(rows)
     g = len(ag)
-    pw = max(min((178 - 52) / g, 22), 6)
+    emblem = (2 + g) <= TP_EMBLEM_MAX_COLS                    # 열이 적으면 본문 2/3 + 스퀘어 엠블럼, 많으면 전체 폭
     head = ["구분", "항목"] + [esc(a[0]) if len(a) == 1 else f"{esc(a[0])}~<br/>{esc(a[-1])}" for a, _ in ag]
-    table_rows, spans = grouped_rows(groups, lambda i, l: [esc(v[i]) for _, v in ag])
-    st.append(data_table(head, table_rows, fit([20, 32] + [pw] * g), aligns=[0, 0] + [2] * g, size=num_size(pw),
-                         spans=spans))
-    return st
+
+    def body(W):
+        pw = max(min((220 - 52) / g, 28), 8)
+        table_rows, spans = grouped_rows(groups, lambda i, l: [esc(v[i]) for _, v in ag])
+        return [list_table(head, table_rows, wfit([20, 32] + [pw] * g, W), [0, 0] + [2] * g, spans=spans)]
+    first, last = rows[0][0], rows[-1][0]
+    cards = [("조회 연령", f"{first} ~ {last}", "", f"{len(rows)}개 연령을 조회했어요"),
+             ("보장 금액 구간", str(g), "개", " / ".join(f"{a[0]}" if len(a) == 1 else f"{a[0]}~{a[-1]}" for a, _ in ag))]
+    ttl = "연령이 바뀌어도 보장 금액이 같아요" if g == 1 else f"연령에 따라 보장 금액이 {g}개 구간으로 달라져요"
+    return table_page(src, title, ttl, "연령에 따라 보장 금액이 어떻게 바뀌는지 정리했어요. (단위: 만원)", cards, body, emblem=emblem)
+
+
+def _expected_table_numbers(e):
+    """표 쪽 검사용: 결과 쪽에 그대로 나와야 하는 원본 값(숫자가 들어간 문자열)."""
+    k, d = e["kind"], e["data"]
+    out = []
+    if k == "generation":
+        for m in d["members"]:
+            out += m["a"] + m["b"]
+    elif k == "products":
+        dd = d["d"]
+        out += dd["need"] + dd["prep"] + dd["short"]
+        for p in dd["products"]:
+            if any(v != "-" for v in p["vals"]):
+                out += p["vals"]
+    elif k == "ages":
+        for _, vals in age_groups(d["rows"]):
+            out += vals
+    return [v for v in out if re.search(r"\d", v)]
+
+
+def verify_table_values(pdf_path, entries):
+    """표 쪽 검사: 원본에서 읽은 모든 값이 결과 쪽에 같은 횟수 이상 그대로 나오는지 확인한다. 하나라도 없으면 오류로 멈춘다."""
+    from collections import Counter
+    targets = [e for e in entries if e["kind"] in ("generation", "products", "ages") and e["mode"] == "전용"]
+    if not targets:
+        return
+    with pdfplumber.open(str(pdf_path)) as pdf:
+        for e in targets:
+            want = Counter(_expected_table_numbers(e))
+            have = Counter((pdf.pages[e["n"] - 1].extract_text() or "").split())
+            miss = {k: v - have.get(k, 0) for k, v in want.items() if have.get(k, 0) < v}
+            if miss:
+                raise RuntimeError(f"원본 p.{e['n']} {e['title']} 표 검사 실패: 빠진 값 {miss}")
+            print(f"[검사] 원본 p.{e['n']} {e['title']} 표 숫자 {sum(want.values())}개 대조 일치")
 
 
 # ----------------------------------------------------------------------------
@@ -19361,6 +19565,7 @@ def build_pdf(entries, ctx, out_path):
     verify_16x9(out_path)
     verify_body_values(out_path, entries)
     verify_enrollment_values(out_path, entries)
+    verify_table_values(out_path, entries)
 
 
 def convert(src, out, force_generic=False):
