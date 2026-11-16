@@ -1,4 +1,4 @@
-# 2026-11-16 KST | 수정: 신체부위별 보장현황 인체 그림에서 연결선 없는 왼 폐 장식 삭제 (APP_VERSION 1.59) | 이전: 부족 회색 (1.58)
+# 2026-11-16 KST | 수정: 분석 인사이트 상자 전체(신체부위·보장 제안 포함)를 한 항목 한 줄로 표시 (APP_VERSION 1.62) | 이전: 계약별 보장 현황 한 줄 표시 (1.61)
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -6,35 +6,33 @@
       (쪽별 요약 + 분석 슬라이드. 숫자는 원본 그대로, 결과는 원본과 다시 대조한다.)
 
 교보생명 '보장분석 보고서' PDF를 읽어서, 요약한 내용을 가지고 분석 PDF 를 만든다(분석 PDF 가 주 결과물, 요약 PDF 는 함께 저장). 요약은 원칙은 1:1로 만들돼 가독성을 위해 원본의 데이터가 많아 한 페이지로 표현 할 수 없으면 최대 다섯장까지 만들어서 순서의 요약 PDF를 만든다.
-아래 목록은 '전체 양식(26쪽)'의 기준 구성이다. 실제 PDF는 이보다 쪽이 줄거나 늘어도 되며,
-쪽 번호가 아니라 쪽 제목을 보고 종류를 판별해 원본 p.N → 요약 p.N 으로 1:1 대응시킨다.
+아래 목록은 '기준 목차 20항목'(v1.53 확정, 내장이미지_설명서.md ② 와 같다)이다. 앞으로 다루는 모든 문서는 이 기준 안에 있다.
+쪽 수·쪽 번호는 문서(사람)마다 다르므로 쪽 번호가 아니라 쪽 제목을 보고 항목을 판별하며, 같은 이름의 쪽(1/6, 2/6 …)은 한 항목으로 합친다.
+목록 출력 형식: '12. 보장항목별 분석 (원본 p.25~30) [범용]' — 앞 숫자가 기준 번호이고, 해당 항목이 없는 문서는 그 번호를 건너뛴다.
 
-  원본 p.1 표지          → 요약 p.1
-  원본 p.2 Pride of KYOBO → 요약 p.2
-  원본 p.3 보험 가입 현황 → 요약 p.3
-  원본 p.4 종합요약 → 요약 p.4
-  원본 p.5 세대 분석      → 요약 p.5
-  원본 p.6 상품별 분석 1/2 → 요약 p.6
-  원본 p.7 상품별 분석 2/2 → 요약 p.7
-  원본 p.8 신체부위별 보장현황 → 요약 p.8
-  원본 p.9 보장밸런스(그래프) → 요약 p.9
-  원본 p.10 연령별 분석 1/2 → 요약 p.10
-  원본 p.11 연령별 분석 2/2 → 요약 p.11
-  원본 p.12 보장항목별 분석 1/6 → 요약 p.12
-  원본 p.13 보장항목별 분석 2/6 → 요약 p.13
-  원본 p.14 보장항목별 분석 3/6 → 요약 p.14
-  원본 p.15 보장항목별 분석 4/6 → 요약 p.15
-  원본 p.16 보장항목별 분석 5/6 → 요약 p.16
-  원본 p.17 보장항목별 분석 6/6 → 요약 p.17
-  원본 p.18 보장 제안 → 요약 p.18
-  원본 p.19 보장 제안 전/후 비교 1/6 → 요약 p.19
-  원본 p.20 보장 제안 전/후 비교 2/6 → 요약 p.20
-  원본 p.21 보장 제안 전/후 비교 3/6 → 요약 p.21
-  원본 p.22 보장 제안 전/후 비교 4/6 → 요약 p.22
-  원본 p.23 보장 제안 전/후 비교 5/6 → 요약 p.23
-  원본 p.24 보장 제안 전/후 비교 6/6 → 요약 p.24
-  원본 p.25 신체부위별 보장현황 전/후 비교 → 요약 p.25
-  원본 p.26 보장밸런스(그래프) 전/후 비교 → 요약 p.26
+  번호  항목                          우성래 70쪽  강재설 25쪽  분석 PDF 상태          슬라이드 종류(kind)
+   1    표지                          p.1          p.1          구현                   요약 PDF 와 같은 표지
+   2    Pride of KYOBO                p.2          -            미구현                 -
+   3    유의사항                      p.3          -            미구현                 -
+   4    보험 가입 현황                p.4~5        p.2          구현                   enroll
+   5    세대 보장요약                 p.6          -            구현(종합 진단)        summary
+   6    종합요약                      p.7          p.3          구현                   score
+   7    세대 분석                     p.8          -            구현(영역별)           area
+   8    상품별 분석                   p.9~20       p.4~7        구현                   diag, chemo, uncovered, death, stable/stablechart, contracts
+   9    신체부위별 보장현황           p.21         p.8          구현                   bodyfig, bodymap
+  10    보장밸런스(그래프)            p.22         -            부분(5번 쪽 막대로)    summary 의 막대
+  11    연령별 분석                   p.23~24      p.9~10       구현                   ages, agetable
+  12    보장항목별 분석               p.25~30      -            부분(8번 쪽들이 대신)  diag, death, stable
+  13    타사 상품별 가입 현황         p.31~50      p.11~24      구현                   other
+  14    보장 제안                     p.51         p.25         구현                   proposal
+  15    보장 제안 전/후 비교          p.52~53      -            미구현                 -
+  16    상품별 분석 전/후 비교        p.54~65      -            미구현                 -
+  17    연령별 분석 전/후 비교        p.66~67      -            미구현                 -
+  18    신체부위별 보장현황 전/후 비교 p.68        -            미구현                 -
+  19    보장밸런스(그래프) 전/후 비교 p.69         -            미구현                 -
+  20    컨설팅 종합의견               p.70         -            미구현                 -
+  부록  보완 순서 제안과 확인할 점    원본에 없음  원본에 없음  구현(정리자 제안)      plan
+  (쪽 순서는 이 번호 순서이며 코드의 src_order 가 정한다. 항목별 쪽 설계 기준은 md ② 에 있다.)
 
 분석 쪽 대체 규칙 (1.20~)
   분석 슬라이드가 다루는 원본 쪽(상품별 분석, 연령별 분석)은 요약 쪽을 만들지 않고 분석 쪽이 대신한다(내용 중복 방지).
@@ -212,7 +210,7 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.59"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.62"        # 이 파일을 수정할 때마다 올린다
 
 # ----------------------------------------------------------------------------
 # 0. 내장 이미지 — 업로드한 원본 파일 4개를 base64 PNG 로 이 파일 안에 담았다. (별도 이미지 파일 불필요)
@@ -20915,6 +20913,7 @@ def _draw_slide(D, s, n, N, ctx):
 #   고정값: 원 ÷ 10,000 = 만원(나누어떨어질 때만), 막대 수 8개 이하 34px·10개 이하 30px·초과 26px, X_OTHER_MAX_ROWS=16.
 # ----------------------------------------------------------------------------
 X_KINDS = ("enroll", "score", "bodyfig", "bodymap", "contracts", "agetable", "other", "proposal", "stablechart")
+X_INSIGHT_MAX_LINES = 10           # 1.61: 인사이트 상자에 한 줄씩 적는 계약 수(넘으면 마지막 줄을 `외 N건`)
 X_CONTRACTS_PER_SLIDE = 3         # 계약별 보장 슬라이드 한 장에 올리는 계약 수
 X_OTHER_MAX_ROWS = 16             # 타사 가입 현황 슬라이드 표에 올리는 보장항목 수 (금액 큰 순, 좌우 2열)
 X_AGE_NOTE = "직전 연령 대비: 초록 = 늘어난 값, 주황 = 줄어든 값, 빨강 = 사라진 보장"
@@ -21067,6 +21066,7 @@ def bodymap_slide(entries):
         ins2 += [(g + ": ", True), (", ".join(zl) + (" / " if (g, zl) != zero_g[:4][-1] else ""), False)]
     return dict(kind="bodymap", label="신체부위별 보장현황", headline=f"신체부위 {tot}개 항목 중 보장 없음 {zero}개",
                 sub=f"보장 있는 항목 {tot - zero}개, 금액 단위 만원", bars=bars, insight1=ins1, insight2=ins2,
+                insight2_lines=[f"{g}: {lab}" for g, zl in zero_g for lab in zl][:X_INSIGHT_MAX_LINES],     # 1.62: 보장 없는 항목 한 줄에 하나
                 quotes=[amt for _, _, amt, _ in have])
 
 
@@ -21240,13 +21240,26 @@ def contract_slides(entries, ctx):
     vmax = max(len(c["ben"]) for c in cons)
     bars = [(_wide_name(c["name"]), len(c["ben"]), (AN_C_NEED if len(c["ben"]) else AN_C_NONE), f"{len(c['ben'])}개") for c in cons]
     ins1 = [(_short_name(best["name"]), True), (f"({len(best['ben'])}개 항목)", True), (" 보장이 가장 넓음.", False)]
-    ins2 = ([(f"분석 항목 보장이 없는 계약 {len(none_c)}건: ", False), (", ".join(_wide_name(c["name"]) for c in none_c), True)]
+    ins2 = ([(f"분석 항목 보장이 없는 계약 {len(none_c)}건", False)]
             if none_c else [("모든 계약이 분석 항목을 하나 이상 보장.", False)])
+    def _line_name(n):                                               # 1.61: 한 줄에 들어가게 (…)·[…] 꼬리표(중첩 포함)를 뗀다
+        n = n or ""
+        while True:
+            m = re.sub(r"[\(\[][^\(\)\[\]]*[\)\]]", "", n)
+            if m == n:
+                break
+            n = m
+        n = re.sub(r"[\(\)\[\]]", "", n)
+        n = re.sub(r"\s*,\s*", " ", n.replace("무배당", ""))
+        return re.sub(r"\s+", " ", n).strip() or "(이름 없음)"
+    none_lines = [_line_name(c["name"]) for c in none_c]             # 1.61: 계약 하나를 한 줄에 (그래도 길면 … 로 줄임)
+    if len(none_lines) > X_INSIGHT_MAX_LINES:
+        none_lines = none_lines[:X_INSIGHT_MAX_LINES - 1] + [f"외 {len(none_lines) - X_INSIGHT_MAX_LINES + 1}건"]
     chunks = [bars[i:i + X_BARS_PER_PAGE] for i in range(0, len(bars), X_BARS_PER_PAGE)][:X_MAX_PAGES]   # 1.37: 막대 10개씩 1~5쪽
     return [dict(kind="contracts", label="계약별 보장 현황" + (f" ({i + 1}/{len(chunks)})" if len(chunks) > 1 else ""),
                  headline=f"계약 {len(cons)}건 중 {len(cons) - len(none_c)}건이 분석 항목 보장",
                  sub=f"{_short_name(best['name'])}의 보장 {len(best['ben'])}개 항목으로 가장 넓음", bars=ch, vmax=vmax,
-                 insight1=ins1, insight2=ins2, quotes=[]) for i, ch in enumerate(chunks)]
+                 insight1=ins1, insight2=ins2, insight2_lines=none_lines, quotes=[]) for i, ch in enumerate(chunks)]
 
 
 def age_table_slides(A):
@@ -21386,6 +21399,8 @@ def proposal_slide(entries):
     ins2 = [(f"제안 전 가입 {heads[0][0]}건, 월보험료 {heads[0][1]}원. 제안 후 가입 {heads[1][0]}건, 월보험료 {heads[1][1]}원.", False)]
     return dict(kind="proposal", label="보장 제안 전/후 비교", headline=head, sub=sub, cats=["충분", "부족", "미보장"],
                 before=[int(x) for x in sts[0]], after=[int(x) for x in sts[1]], insight1=ins, insight2=ins2,
+                insight1_lines=[f"신규 {new}건", f"변경 {chg}건", f"제외 {out}건", f"유지 {keep}건"],     # 1.62: 한 항목 한 줄
+                insight2_lines=[f"제안 전 가입 {heads[0][0]}건", f"월보험료 {heads[0][1]}원", f"제안 후 가입 {heads[1][0]}건", f"월보험료 {heads[1][1]}원"],
                 note=("보험계약 변경사항 표 없음." if same else ""),
                 quotes=[heads[0][1] + "원", heads[1][1] + "원"])
 
@@ -21492,11 +21507,30 @@ def extra_slides(entries, ctx, A):
 
 
 def _insight(D, s, y0=196, h=400):
+    """1.62: 분석 인사이트 상자. 항목은 한 항목 = 한 줄(insight1_lines / insight2_lines). 줄 목록이 없으면 문장(insight1/insight2)을 줄바꿈해 쓴다."""
+    l1, l2 = s.get("insight1_lines") or [], s.get("insight2_lines") or []
+    n = len(l1) + len(l2)
+    big, step = (22, 34) if n <= 6 else (20, 30)
+    if n:
+        h = min(548, max(h, 250 + step * n + (40 if s.get("insight2") and l2 else 0) + 30))
     D.box(918, y0, 470, h, fill=AN_BOX, r=12)
     D.text(950, y0 + 66, "분석 인사이트", 27, AN_INK, True)
-    yy = D.para(950, y0 + 112, 410, s["insight1"], 22, AN_INK, 1.5)
+    if l1:
+        yy = y0 + 112
+        for t_ in l1:
+            D.text(950, yy, _fit_txt(D, t_, big, 410), big, AN_INK, True)
+            yy += step
+    else:
+        yy = D.para(950, y0 + 112, 410, s["insight1"], 22, AN_INK, 1.5)
     D.line(950, yy - 10, 1356, yy - 10, "#D5DAE2", 3)
-    return D.para(950, yy + 34, 410, s["insight2"], 22, AN_INK, 1.5)
+    if s.get("insight2") and not (l2 and s.get("kind") in ("proposal", "bodymap")):
+        yy = D.para(950, yy + 34, 410, s["insight2"], 22, AN_INK, 1.5)
+    else:
+        yy += 34
+    for t_ in l2:
+        D.text(950, yy, _fit_txt(D, t_, big if n > 6 else 20, 410), big if n > 6 else 20, AN_INK, True)      # 한 항목 = 한 줄
+        yy += step
+    return yy
 
 
 def _fit_txt(D, txt, size, maxw):
@@ -21611,8 +21645,8 @@ def _draw_extra(D, s):
         else:
             _insight(D, s, 196, 420 if k != "bodymap" else 440)
             if k == "bodymap":
-                xx = D.chip(918, 660, AN_C_OK, "충분")
-                D.chip(xx, 660, AN_C_LOW, "부족")
+                xx = D.chip(1080, 135, AN_C_OK, "충분")          # 1.62: 인사이트 줄이 늘어 범례를 머리 아래 오른쪽으로 옮김
+                D.chip(xx, 135, AN_C_LOW, "부족")
     elif k == "agetable":
         D.text(67, 235, "연령별로 보장 중인 항목 수 (개)", 17, "#1F2937", True)
         D.vbars(67, 252, 790, 250, s["cats"], [("v", AN_C_NEED, s["vals"])], _nice_max(max(s["vmax"], 1)), "연령")
