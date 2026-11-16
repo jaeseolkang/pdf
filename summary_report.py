@@ -1,4 +1,4 @@
-# 2026-11-16 KST | 수정: 분석 인사이트 상자 전체(신체부위·보장 제안 포함)를 한 항목 한 줄로 표시 (APP_VERSION 1.62) | 이전: 계약별 보장 현황 한 줄 표시 (1.61)
+# 2026-11-17 KST | 수정: 요약 리포트 맨 끝에 보험이 필요한 이유 2~3줄 추가 (APP_VERSION 1.71) | 이전: 권장 사항 번호·쌍점 항목 구분 (1.70)
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -82,7 +82,7 @@
       (분석 쪽: 원본 3~8쪽 숫자 분석, 16:9 최대 9장) 항목을 적정/부족/미보장으로 분류하고
       개수·준비율·순위를 계산해 '한 문장 결론 + 설명 + 카드/표/그림'으로 정리한다. 계산한 값은 고정한 식으로만 만들고(md 3-6), 원본에서 그대로
       인용한 값은 결과 PDF 에서 다시 대조한다. (analysis_slides, build_analysis_pdf, draw_analysis_page)
-      요약 PDF('<원본이름>_요약.pdf')는 분석 쪽을 붙이지 않고 원본과 1:1 로 함께 저장한다. 요약 PDF 를 만들지 못해도 분석 PDF 는 그대로 남는다.
+      1.63~: 요약 PDF('<원본이름>_요약.pdf')는 기본으로 만들지 않는다(MAKE_SUMMARY_PDF=False). 켜면 분석 쪽 없이 원본과 1:1 로 함께 저장한다. 요약 PDF 를 만들지 못해도 분석 PDF 는 그대로 남는다.
       선택 옵션(범용 요약·분석 쪽 끝에 넣기·분석 PDF 따로 저장)은 없다. 분석할 데이터가 없는 PDF 만 요약 PDF 가 주 결과물이 된다.
   15) [표 쪽 공통 양식] 표로 표현할 수 있는 데이터(세대 분석, 상품별 분석, 연령별 분석, 표가 있는 범용 쪽)는 항상 보험 가입 현황과 같은 형식으로 만든다.
       작은 제목(+고객명·원본 쪽) → 큰 제목 문장 → 한 줄 설명 → 카드 2~3개 → 목록 표(머리줄 아래 굵은 회색 선, 행 사이 옅은 선, 숫자 오른쪽 정렬). (table_page, list_table)
@@ -95,11 +95,11 @@
 사용
   1) 창으로 쓰기   : python summary_report_v12.py
                      → [PDF 선택...] 으로 원본을 고르고 [PDF 만들기]를 누른다.
-                       저장 위치를 바꾸지 않으면 원본과 같은 폴더에 '<원본이름>_분석.pdf'(주 결과)와 '<원본이름>_요약.pdf' 가 저장된다.
+                       저장 위치를 바꾸지 않으면 원본과 같은 폴더에 '<원본이름>_분석.pdf' 만 저장된다(1.63~, _요약.pdf 는 만들지 않음).
                        (검은 콘솔 창 없이 쓰려면 파일 이름을 .pyw 로 바꿔 더블클릭)
   2) 명령줄로 쓰기 : python summary_report_v12.py 고순종.pdf
                      python summary_report_v12.py 고순종.pdf 고순종_분석.pdf
-     선택 옵션은 없다. 항상 분석 PDF 를 만들고, 요약 PDF 는 같은 이름의 '_요약.pdf' 로 함께 저장한다.
+     선택 옵션은 없다. 분석 PDF 만 만든다(1.63~, 요약 PDF 는 만들지 않음).
 
 한글 글꼴
   1.48: 굴림체(Windows 의 gulim.ttc 안 GulimChe)를 가장 먼저 쓴다. 굴림체에는 굵은 글꼴이 없어 굵게는 테두리로 만든다.
@@ -210,7 +210,10 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.62"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.71"        # 이 파일을 수정할 때마다 올린다
+MAKE_REPORT_PDF = True            # 1.64: 분석 결과 500자 요약 리포트(<이름>_요약리포트.pdf)를 함께 만든다
+REPORT_CHARS = 500                # 요약 리포트 글자 수(공백 포함)
+MAKE_SUMMARY_PDF = False         # 1.63: 요약 PDF(<이름>_요약.pdf)를 만들지 않는다. True 로 바꾸면 예전처럼 함께 저장(분석 PDF 를 못 만든 경우는 요약 PDF 를 대신 만든다)
 
 # ----------------------------------------------------------------------------
 # 0. 내장 이미지 — 업로드한 원본 파일 4개를 base64 PNG 로 이 파일 안에 담았다. (별도 이미지 파일 불필요)
@@ -20089,7 +20092,7 @@ def convert(src, out):
     print(f"[버전] {APP_VERSION}  (출력: 16:9, 분석 PDF 우선)")
     check_history_md()
     ap, sp = analysis_path(out), summary_path(out)
-    res = dict(main=None, analysis=None, summary=None, n_ana=0, n_sum=None, n_src=0)
+    res = dict(main=None, analysis=None, summary=None, report=None, n_ana=0, n_sum=None, n_src=0)
     with pdfplumber.open(str(src)) as pdf:
         n_src = len(pdf.pages)
         res["n_src"] = n_src
@@ -20116,21 +20119,32 @@ def convert(src, out):
             except OSError:
                 pass
             print("[분석] 분석 PDF 를 만들지 못했습니다(분석할 데이터 없음). 요약 PDF 가 주 결과물입니다.")
-        # 2) 요약 PDF — 분석 쪽 없이 원본과 1:1. 실패해도 분석 PDF 는 그대로 둔다.
-        try:
-            build_pdf(entries, ctx, sp, analysis=False)
-            with pdfplumber.open(str(sp)) as po:
-                res["n_sum"] = len(po.pages)
-            res["summary"] = sp
-            if not res["main"]:
-                res["main"] = sp
-            print(f"[완료] 요약 PDF  {sp}  (요약 {res['n_sum']}쪽 / 원본 {n_src}쪽)")
-            if res["n_sum"] != n_src:
-                print("[경고] 요약 쪽수가 원본과 다릅니다. 내용이 한 쪽을 넘쳤는지 확인하세요.")
-        except Exception as ex:
-            if not res["analysis"]:
-                raise                                     # 분석 PDF 도 없으면 결과가 없으므로 오류로 알린다
-            print(f"[주의] 요약 PDF 를 만들지 못했습니다(분석 PDF 는 정상): {ex}")
+        # 1-2) 요약 리포트 PDF(1.64) — 분석 PDF 의 숫자를 6하 원칙 서술형·구어체 500자로 정리한 1쪽. 실패해도 분석 PDF 는 그대로 둔다.
+        if MAKE_REPORT_PDF and res["analysis"]:
+            try:
+                rp, nchar = make_report_pdf(ap, report_path(out))
+                res["report"] = rp
+                print(f"[완료] 요약 리포트  {rp}  ({nchar}자)" + ("" if nchar == REPORT_CHARS else f"  ※ {REPORT_CHARS}자에 맞추지 못했습니다"))
+            except Exception as ex:
+                print(f"[주의] 요약 리포트를 만들지 못했습니다(분석 PDF 는 정상): {ex}")
+        # 2) 요약 PDF — 분석 쪽 없이 원본과 1:1. 실패해도 분석 PDF 는 그대로 둔다. (1.63: 기본은 만들지 않음)
+        if not MAKE_SUMMARY_PDF and res["analysis"]:
+            print("[안내] 요약 PDF 는 만들지 않습니다(분석 PDF 만 저장).")
+        else:
+          try:
+              build_pdf(entries, ctx, sp, analysis=False)
+              with pdfplumber.open(str(sp)) as po:
+                  res["n_sum"] = len(po.pages)
+              res["summary"] = sp
+              if not res["main"]:
+                  res["main"] = sp
+              print(f"[완료] 요약 PDF  {sp}  (요약 {res['n_sum']}쪽 / 원본 {n_src}쪽)")
+              if res["n_sum"] != n_src:
+                  print("[경고] 요약 쪽수가 원본과 다릅니다. 내용이 한 쪽을 넘쳤는지 확인하세요.")
+          except Exception as ex:
+              if not res["analysis"]:
+                  raise                                     # 분석 PDF 도 없으면 결과가 없으므로 오류로 알린다
+              print(f"[주의] 요약 PDF 를 만들지 못했습니다(분석 PDF 는 정상): {ex}")
     return res
 
 
@@ -21701,6 +21715,168 @@ def summary_path(out):
     return Path(out).with_name(_base_stem(out) + "_요약.pdf")
 
 
+def report_path(out):
+    """요약 리포트 PDF 경로: <이름>_요약리포트.pdf"""
+    return Path(out).with_name(_base_stem(out) + "_요약리포트.pdf")
+
+
+def _report_info(ap):
+    """분석 PDF 의 글을 읽어 리포트에 쓸 값을 모은다(없는 값은 None). 값은 모두 분석 PDF 에 적힌 그대로다."""
+    pages = []
+    with pdfplumber.open(str(ap)) as pdf:
+        for pg in pdf.pages:
+            pages.append(pg.extract_text() or "")
+    allt = "\n".join(pages)
+    flat = re.sub(r"\s+", " ", allt)
+
+    def g(pat, txt=None, grp=1):
+        m = re.search(pat, flat if txt is None else txt)
+        return m.group(grp) if m else None
+    info = dict(name=g(r"(\S+) 고객님을 위한"), fp=(g(r"(\S+) Financial Planner") or g(r"Financial Planner (?!소속)(\S+)")), branch=g(r"소속: (\S+)"))
+    d = re.search(r"조회시점 (\d{4})-(\d{2})-(\d{2})", flat) or re.search(r"출력 \| (\d{4})-(\d{2})-(\d{2})", flat)
+    info["date"] = f"{int(d.group(1))}년 {int(d.group(2))}월 {int(d.group(3))}일" if d else None
+    info["age"] = g(r"영역별 보장 준비 현황 \S+ \((\d+)세\)")
+    m = re.search(r"유지 계약 (\d+)건, 월 보험료는 ([\d,]+)원", flat)
+    info["n_con"], info["prem"] = (m.group(1), m.group(2)) if m else (None, None)
+    info["score"] = g(r"종합점수 (\d+)점")
+    m = re.search(r"(\d+)개 항목 중 적정 (\d+)개, 보완 필요 (\d+)개", flat)
+    info["total"], info["ok"], info["need"] = m.groups() if m else (None, None, None)
+    info["full_areas"] = g(r"필요액을 모두 채운 영역 (\d+)개")
+    _ar = r"(?:수술|입원|사망|항암|통원|실손|진단)"
+    info["strong"] = g(r"(" + _ar + r"(?:, ?" + _ar + r")*) 충분, 간단 점검")
+    info["death"] = g(r"사망 보장은 필요액의 ([\d~]+)% 수준")
+    info["diag"] = g(r"진단비는 필요액의 약 (\d+)%만 준비")
+    info["chemo_need"], info["chemo_prep"] = (None, None)
+    m = re.search(r"필요액 ([\d,]+)만원 중 현재 (\S+?)만원만 보장", flat)
+    if m:
+        info["chemo_need"], info["chemo_prep"] = m.group(1), m.group(2)
+    _tk = r"(?:[A-Za-z]{2,}|[가-힣]+)"
+    m = re.search(r"(" + _tk + r"(?:, ?" + _tk + r"){0,2}) 등 (\d+)개 항목 보장 없음", flat)
+    info["miss_names"], info["miss_n"] = (re.split(r", ?", m.group(1))[:3], m.group(2)) if m else (None, None)
+    m = re.search(r"신체부위 (\d+)개 항목 중 보장 없음 (\d+)개", flat)
+    info["body_total"], info["body_none"] = m.groups() if m else (None, None)
+    info["age_start"] = g(r"(\d+)세부터 보장금액 감소 시작")
+    m = re.search(r"(\d+)세에는 (\d+)개 항목 중 (\d+)개만 유지", flat)
+    info["age_end"], info["age_all"], info["age_keep"] = m.groups() if m else (None, None, None)
+    m = re.findall(r"부족액: (\S+) ([\d,]+)만원, (\S+) ([\d,]+)만원", flat)          # 1.65: 보완 순서의 부족액(암 진단비, 뇌·심장 진단비)
+    info["cancer"] = m[0] if len(m) > 0 else None
+    info["brain"] = m[1] if len(m) > 1 else None
+    m = re.search(r"필요액: LTC ([\d,]+)만원, 중증치매 ([\d,]+)만원", flat)
+    info["ltc"] = m.groups() if m else None
+    ch = []
+    for nm_, amt_ in re.findall(r"(항암약물치료|항암중입자 치료|항암방사선 치료) (?:항암 치료 항목 )?필요 [\d,]+ / 준비 \S+? (?:[\d.]+k? )*([\d,]+)만원 부족", flat):
+        if (nm_, amt_) not in ch:
+            ch.append((nm_, amt_))
+    info["chemo_items"] = ch
+    return info
+
+
+def _report_parts(i):
+    """리포트 문장 조각. 조각마다 길이가 다른 표현을 여러 개 두고, 합계가 REPORT_CHARS 가 되게 고른다. 6하 원칙·서술형·구어체(해요체)."""
+    nm = i["name"] or "고객"
+    who = f"{i['age']}세 {nm}" if i.get("age") else nm
+    P = []
+    # 1.65: 부제와 첫 문단(누가·언제·왜)은 넣지 않는다
+    if i["n_con"]:
+        P.append([f"고객님은 유지 계약이 {i['n_con']}건이고 매달 {i['prem']}원을 보험료로 내고 계세요.", f"고객님은 유지 계약 {i['n_con']}건에 매달 {i['prem']}원을 보험료로 내고 계세요."])
+    if i["score"] and i["ok"]:
+        low = int(i["score"]) < 80
+        P.append([f"{'그런데도' if low else '그래서'} 종합점수는 {i['score']}점이에요. {i['total']}개 항목 중 {i['ok']}개만 적정하고 {i['need']}개는 보완이 필요하기 때문이에요.",
+                  f"{'그런데도' if low else '그래서'} 종합점수는 {i['score']}점이에요. {i['total']}개 항목 중 {i['ok']}개가 적정하고 {i['need']}개는 보완이 필요해요."])
+    if i["full_areas"]:
+        P.append([f"7개 보장 영역 중 필요액을 모두 채운 영역은 {i['full_areas']}개예요.", f"7개 보장 영역 중 필요액을 다 채운 영역은 {i['full_areas']}개예요.", ""])
+    st = i["strong"] or ""
+    chemo = ("하나도 없어요" if i["chemo_prep"] in ("-", "0") else None)
+    if st and i["death"] and "사망" in st:
+        P.append([f"{st} 보장은 든든해서 사망은 필요액의 {i['death']}%까지 준비돼 있어요.", f"{st} 보장은 아주 든든해서 사망은 필요액의 {i['death']}%까지 준비돼 있어요."])
+        if i["diag"]:
+            P.append([f"반면 진단비는 필요액의 약 {i['diag']}%만 준비됐고, 항암 치료비는 " + (chemo or f"필요액 {i['chemo_need']}만원 중 {i['chemo_prep']}만원만 준비돼 있어요") + "."])
+    else:
+        if st and i["diag"] and i["death"]:
+            P.append([f"{st}은 충분하지만 진단비는 필요액의 약 {i['diag']}%뿐이고, 사망 보장도 필요액의 {i['death']}% 수준이에요.", f"{st}은 충분하지만 진단비는 필요액의 {i['diag']}%뿐이고, 사망 보장도 필요액의 {i['death']}% 수준이에요."])
+        if i["chemo_need"]:
+            P.append(["항암 치료비는 하나도 없어요." if chemo else f"항암 치료비도 필요액 {i['chemo_need']}만원 중 {i['chemo_prep']}만원만 준비돼 있어요.", ""] if chemo else [f"항암 치료비도 필요액 {i['chemo_need']}만원 중 {i['chemo_prep']}만원만 준비돼 있어요.", f"항암 치료비도 필요액 {i['chemo_need']}만원 중 {i['chemo_prep']}만원 준비돼 있어요."])
+    if i["miss_n"] and i["body_none"]:
+        names = ", ".join(i["miss_names"])
+        P.append([f"{names} 같은 {i['miss_n']}개 항목은 아예 보장이 없고, 신체부위 {i['body_total']}개 항목 중 {i['body_none']}개도 보장이 없어요.",
+                  f"{names} 같은 {i['miss_n']}개 항목은 보장이 없고, 신체부위 {i['body_total']}개 항목 중 {i['body_none']}개도 보장이 없어요."])
+    if i["age_start"]:
+        P.append([f"{i['age_start']}세부터는 보장금액도 줄기 시작해요.", ""])
+    # 1.70: 권장 사항부터는 줄을 나누고 번호(1. 2. 3.)와 쌍점(:)으로 항목을 구분한다. 앞의 "\n" 은 줄바꿈 표시(글자 수에는 공백 하나로 셈)
+    P.append(["\n그래서 이렇게 순서를 정해 채우시길 권해 드려요.", "\n그래서 이 순서대로 채우시길 권해 드려요."])
+    n_ = 0
+    def nn():
+        nonlocal n_
+        n_ += 1
+        return f"\n{n_}. "
+    if i.get("cancer"):
+        a_, x_, b_, y_ = i["cancer"]
+        k = nn()
+        P.append([f"{k}암 진단비: {a_} {x_}만원, {b_} {y_}만원이 부족해요.", f"{k}암 진단비: {a_} {x_}만원, {b_} {y_}만원 부족."])
+    if i.get("chemo_items"):
+        full = ", ".join(f"{n} {a}만원" for n, a in i["chemo_items"])
+        two = ", ".join(f"{n} {a}만원" for n, a in i["chemo_items"][:2])
+        k = nn()
+        P.append([f"{k}항암 치료비: {full}이 부족해요.", f"{k}항암 치료비: {two}이 부족해요.", f"{k}항암 치료비."])
+    if i.get("brain"):
+        a_, x_, b_, y_ = i["brain"]
+        k = nn()
+        P.append([f"{k}뇌와 심장 진단비: {a_} {x_}만원, {b_} {y_}만원을 채워요.", f"{k}진단비: {a_}, {b_}를 채워요."])
+    if i.get("ltc"):
+        k = nn()
+        P.append([f"{k}간병과 치매: LTC {i['ltc'][0]}만원, 중증치매 {i['ltc'][1]}만원을 검토해 보세요.", f"{k}간병과 치매: LTC, 중증치매를 검토해 보세요."])
+    return P
+
+
+REPORT_CLOSING = ("보험은 큰 병이나 사고가 갑자기 닥쳤을 때 치료비와 생활비 걱정 없이 치료에 집중하게 해 주는 안전망이에요. "
+                  "지금 미리 준비해 두면 가족에게 짐을 남기지 않고, 나이가 들어 가입이 어려워지기 전에 대비할 수 있어요.")   # 1.71: 맨 끝 2~3줄(보험이 필요한 이유). 500자 글자 수에는 넣지 않음. 문구는 여기서 수정
+
+def _report_text(info, target=None):
+    """조각마다 표현을 골라 공백 포함 target 자에 맞춘 글을 만든다. 맞는 조합이 없으면 target 이하에서 가장 긴 조합."""
+    target = target or REPORT_CHARS
+    parts = _report_parts(info)
+    best = {0: ((), 0)}                                      # 글자 수 -> (고른 표현 번호들, 비용). 뒤쪽 조각(끝 권고)일수록 자세한 표현(앞 번호)을 우선한다
+    for j, opts in enumerate(parts):
+        nxt = {}
+        for tot, (pick, cost) in best.items():
+            for k, t in enumerate(opts):
+                add = len(t) + (1 if (t and not t.startswith("\n") and pick and any(parts[q][pick[q]] for q in range(len(pick)))) else 0)
+                n = tot + add
+                c = cost + k * (j + 1)
+                if n <= target and (n not in nxt or c < nxt[n][1]):
+                    nxt[n] = (pick + (k,), c)
+        best = nxt
+    n = max(best)
+    pick = best[n][0]
+    text = ""
+    for j, k in enumerate(pick):
+        t = parts[j][k]
+        if t:
+            text += t if (t.startswith("\n") or not text) else " " + t
+    return text
+
+
+def make_report_pdf(ap, out):
+    """분석 PDF 의 결과를 6하 원칙 서술형·구어체 500자로 요약한 1쪽 PDF 를 만든다. -> (경로, 글자 수)"""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from reportlab.lib.styles import ParagraphStyle
+    info = _report_info(ap)
+    if not info.get("name"):
+        raise ValueError("분석 PDF 에서 고객 이름을 찾지 못했습니다")
+    text = _report_text(info)
+    h = ParagraphStyle("h", fontName=FONT_B, fontSize=20, leading=28, textColor=colors.HexColor("#1F3F7A"))
+    sm = ParagraphStyle("s", fontName=FONT, fontSize=11, leading=16, textColor=colors.HexColor("#6B7280"))
+    b = ParagraphStyle("b", fontName=FONT_B, fontSize=14, leading=27, textColor=colors.HexColor("#0A0A0A"), wordWrap="CJK")
+    doc = SimpleDocTemplate(str(out), pagesize=A4, leftMargin=60, rightMargin=60, topMargin=70, bottomMargin=60, title=f"{info['name']} 보장분석 요약 리포트")
+    doc.build([Paragraph(f"{info['name']} 고객님 보장분석 요약 리포트", h), Spacer(1, 6),
+               Spacer(1, 24),
+               Paragraph(text.replace("\n", "<br/>"), b), Spacer(1, 14),
+               Paragraph(REPORT_CLOSING, b), Spacer(1, 26),
+               Paragraph("※ 분석 PDF 의 원본 수치를 정리한 요약이며 보험금 지급 근거가 아님. 약관, 증권 우선.", sm)])
+    return Path(out), len(text)
+
+
 def verify_analysis(path, slides, offset=0):
     """분석 쪽 검사: 쪽 수·16:9 와, 원본에서 그대로 인용한 값이 해당 쪽에 모두 나오는지 확인한다. 빠지면 오류로 멈춘다.
     offset = 분석 쪽 앞에 있는 쪽 수(요약 PDF 안에 붙인 경우 원본 쪽 수, 별도 파일이면 0)."""
@@ -21949,8 +22125,10 @@ class App:
             parts.append(f"분석 {n_ana}쪽")
         if res.get("summary"):
             parts.append(f"요약 {n_sum}쪽")
+        if res.get("report"):
+            parts.append("요약 리포트 1쪽")
         what = " + ".join(parts) if parts else "결과 없음"
-        files = "\n".join(str(p) for p in (res.get("analysis"), res.get("summary")) if p)
+        files = "\n".join(str(p) for p in (res.get("analysis"), res.get("report"), res.get("summary")) if p)
         self.status_var.set(f"완료: 원본 {n_src}쪽 → {what}  |  {main}")
         if res.get("summary") and n_sum != n_src:
             messagebox.showwarning("쪽수 확인", f"요약 {n_src}쪽이 되어야 하는데 {n_sum}쪽입니다.\n로그를 확인하세요.")
