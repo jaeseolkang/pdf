@@ -1,4 +1,4 @@
-# 2026-11-16 19:50 KST | 수정: 기본 글꼴을 2쪽 표시 글꼴(19, 11.0pt)로 통일하고 주석(※)·보조 설명은 한 단계 작게·굵게 없이 (APP_VERSION 1.47) | 이전: 모든 문장 개조식(1.46)
+# 2026-11-16 KST | 수정: 신체부위별 보장현황 인체 그림에서 연결선 없는 왼 폐 장식 삭제 (APP_VERSION 1.59) | 이전: 부족 회색 (1.58)
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -104,6 +104,8 @@
      선택 옵션은 없다. 항상 분석 PDF 를 만들고, 요약 PDF 는 같은 이름의 '_요약.pdf' 로 함께 저장한다.
 
 한글 글꼴
+  1.48: 굴림체(Windows 의 gulim.ttc 안 GulimChe)를 가장 먼저 쓴다. 굴림체에는 굵은 글꼴이 없어 굵게는 테두리로 만든다.
+  굴림체가 없으면 아래 순서로 대체한다.
   Windows는 '맑은 고딕'(malgun.ttf)을 우선 사용한다. 없으면 스크립트·현재 폴더의 fonts/, 사용자·시스템 글꼴 폴더에서
   맑은 고딕 / 나눔고딕 / Noto Sans KR / AppleGothic 을 찾는다. 그래도 없으면 나눔고딕을 한 번 내려받아
   fonts/ 폴더(쓸 수 없으면 사용자 캐시 폴더)에 저장하고, 인터넷도 안 되면 내장 CID 글꼴(HYGothic)로 대체한다.
@@ -210,7 +212,7 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.47"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.59"        # 이 파일을 수정할 때마다 올린다
 
 # ----------------------------------------------------------------------------
 # 0. 내장 이미지 — 업로드한 원본 파일 4개를 base64 PNG 로 이 파일 안에 담았다. (별도 이미지 파일 불필요)
@@ -15032,6 +15034,8 @@ BODY_GROUPS = [("뇌", ["뇌출혈", "뇌경색", "뇌혈관질환", "산정특�
 # ----------------------------------------------------------------------------
 FONT = "Helvetica"
 FONT_B = "Helvetica-Bold"
+BOLD_ALL = True          # 1.49: 모든 글자를 굵게(볼드)를 기본으로 한다. False 로 바꾸면 예전처럼 필요한 곳만 굵게
+BOLD_FAKE = False        # 1.48: 굵은 글꼴 파일이 따로 없으면(굴림체) 테두리를 살짝 그려 굵게 만든다
 
 NAVY = colors.HexColor("#17306B")
 LIGHT = colors.HexColor("#EEF2F8")
@@ -15188,9 +15192,15 @@ def register_fonts():
     _register_fonts()
 
 
+GULIMCHE_INDEX = 1
+
+
 def _font_candidates():
     """(일반, 굵게) 글꼴 쌍을 우선순위대로. 파일이 있는 것만."""
     pairs = []
+    gul = find_font_file("gulim.ttc")                    # 1.48: 굴림체 = gulim.ttc 의 두 번째 글꼴(0 굴림, 1 굴림체, 2 돋움, 3 돋움체)
+    if gul:
+        pairs.append((gul, gul, GULIMCHE_INDEX))
     for reg_names, bold_names in (
             (("malgun.ttf",), ("malgunbd.ttf",)),
             (("NanumGothic.ttf", "NanumGothic-Regular.ttf", "NanumGothicRegular.ttf"),
@@ -15199,19 +15209,23 @@ def _font_candidates():
             (("AppleGothic.ttf",), ("AppleGothic.ttf",))):
         reg = find_font_file(*reg_names)
         if reg:
-            pairs.append((reg, find_font_file(*bold_names) or reg))
+            pairs.append((reg, find_font_file(*bold_names) or reg, 0))
     return pairs
 
 
-def _try_register_ttf(reg, bold):
-    """KR / KR-B 로 등록. CFF(.otf) 처럼 reportlab 이 못 읽는 글꼴이면 False."""
-    global FONT, FONT_B, GLYPHS
+def _try_register_ttf(reg, bold, idx=0):
+    """KR / KR-B 로 등록. CFF(.otf) 처럼 reportlab 이 못 읽는 글꼴이면 False. idx = 글꼴 모음(.ttc) 안 번호."""
+    global FONT, FONT_B, GLYPHS, BOLD_FAKE
     try:
-        pdfmetrics.registerFont(TTFont("KR", reg))
+        pdfmetrics.registerFont(TTFont("KR", reg, subfontIndex=idx))
+        BOLD_FAKE = False
         try:
+            if os.path.normcase(bold) == os.path.normcase(reg):
+                raise ValueError("굵은 글꼴 파일 없음")
             pdfmetrics.registerFont(TTFont("KR-B", bold))
         except Exception:
-            pdfmetrics.registerFont(TTFont("KR-B", reg))
+            pdfmetrics.registerFont(TTFont("KR-B", reg, subfontIndex=idx))
+            BOLD_FAKE = True
         pdfmetrics.registerFontFamily("KR", normal="KR", bold="KR-B", italic="KR", boldItalic="KR-B")
         FONT, FONT_B = "KR", "KR-B"
         GLYPHS = set(pdfmetrics.getFont("KR").face.charToGlyph.keys())
@@ -15227,8 +15241,8 @@ def _register_fonts():
     """한글 글꼴 등록. 시스템·폴더에서 찾고, 없으면 나눔고딕을 내려받고, 그래도 없으면 내장 CID 글꼴로 대체."""
     global FONT, FONT_B
     pdfmetrics.registerFont(UnicodeCIDFont(CID_FALLBACK))
-    for reg, bold in _font_candidates():
-        if _try_register_ttf(reg, bold):
+    for reg, bold, idx in _font_candidates():
+        if _try_register_ttf(reg, bold, idx):
             return
     got = _download_nanum()
     if got and _try_register_ttf(*got):
@@ -15287,6 +15301,10 @@ def build_styles():
     S["cover_sub"] = ParagraphStyle("cover_sub", fontName=FONT, fontSize=15, leading=22, textColor=INK)
     S["cover_title"] = ParagraphStyle("cover_title", fontName=FONT_B, fontSize=30, leading=38, textColor=NAVY,
                                       spaceAfter=6)
+    if BOLD_ALL:                                             # 1.49: 요약 PDF 문단 글꼴도 굵은 글꼴로
+        for st in S.values():
+            if isinstance(st, ParagraphStyle) and st.fontName == FONT:
+                st.fontName = FONT_B
 
 
 # ----------------------------------------------------------------------------
@@ -18635,7 +18653,8 @@ BODY_BASE = {
     "말기폐질환": ("R", 789), "말기간질환": ("R", 847), "말기신부전증": ("R", 906),
 }
 BODY_TEXT_PX = 26
-BODY_STATUS_COLOR = {"충분": "#008973", "부족": "#E28E3A", "미보장": "#C64647"}
+BODY_STATUS_COLOR = {"충분": "#00796B", "부족": "#6B7280", "미보장": "#D32F2F"}   # 1.58 부족=회색, 1.56: 더 진하게
+BODY_DOT_STATUS_R = 9.0          # 1.56: 금액 앞 상태 색 점 반지름(그림 픽셀)
 BODY_LABEL_COLOR = colors.HexColor("#111111")
 BODY_ALT = {"표적항암": "表적항암"}           # 원본 글자가 한자로 되어 있는 경우도 같은 항목으로 본다
 
@@ -18736,8 +18755,10 @@ class BodyMap(Flowable):
             c.setFont(self._font(lab), size)
             c.drawString((x_lab - BODY_PIC_X0) * k, y, lab)
             c.setFillColor(colors.HexColor(BODY_STATUS_COLOR[status]))
-            c.setFont(FONT, size)
+            c.setFont(FONT_B if BOLD_ALL else FONT, size)
             c.drawRightString((x_val - BODY_PIC_X0) * k, y, val)
+            wv = c.stringWidth(val, FONT_B if BOLD_ALL else FONT, size)       # 1.56: 금액 앞 상태 색 점
+            c.circle((x_val - BODY_PIC_X0) * k - wv - 16 * k, y + size * 0.33, BODY_DOT_STATUS_R * k, stroke=0, fill=1)
 
 
 COVER_NAVY = colors.HexColor("#033976")
@@ -18815,9 +18836,10 @@ class CoverPage(Flowable):
     def _text(self, x, y, text, size, color, bold=False, align="L", track=0.0):
         """(x, y)=설계 좌표의 글자 기준선. 글자를 그리고 끝 x(설계 좌표)를 돌려준다. track=글자 사이 간격."""
         c, K = self.canv, self.K
+        bold = bold or BOLD_ALL
         miss = bool(GLYPHS) and any(ord(ch) >= 128 and ord(ch) not in GLYPHS for ch in text)
         font = CID_FALLBACK if miss else (FONT_B if bold else FONT)
-        fake_bold = bold and (miss or FONT_B == FONT)             # 굵은 글꼴이 없으면 테두리를 살짝 그려 굵게
+        fake_bold = bold and (miss or FONT_B == FONT or BOLD_FAKE)             # 굵은 글꼴이 없으면 테두리를 살짝 그려 굵게
         sz = size * K
         w = pdfmetrics.stringWidth(text, font, sz) / K + track * len(text)
         x0 = x - w if align == "R" else x
@@ -19157,6 +19179,109 @@ def make_emblem_png(w_pt, h_pt):
     out.save(buf, "PNG")
     _EMBLEM_CACHE[key] = buf.getvalue()
     return _EMBLEM_CACHE[key]
+
+
+# ---- 진단 엠블럼 (Gauge Emblem) -----------------------------------------------------------------------
+# 종합 진단 쪽 오른쪽 1/3 그림의 이름. (v1.50) 스퀘어 엠블럼과 다른 새 디자인이다.
+#   배경 : 아주 옅은 하늘색에서 흰색으로 이어지는 세로 바탕.
+#   장식 : 로고를 둘러싼 동심원 3겹. 가운데 굵은 호는 보장 적정(초록 청록), 부족(주황), 미보장(빨강)을 뜻하는 색 순서,
+#          바깥은 가는 남색 호, 안쪽은 점선 고리. 숫자·글자는 넣지 않으며 고객이 달라도 같은 그림이다.
+#   중심 : 교보 logo_square 를 흰 종이 테두리 + 살짝 기울임 + 부드러운 그림자로 올렸다. 로고 그림은 크기만 바꾸고 자르기·색·비율은 그대로다.
+#   틀   : 둥근 모서리 + 가는 남색 테두리 선.
+GAUGE_NAME = "진단 엠블럼"
+GAUGE_PX_W = 900
+GAUGE_BG_TOP = (232, 239, 249)          # 바탕 위쪽 색
+GAUGE_BG_BOTTOM = (252, 253, 255)       # 바탕 아래쪽 색
+GAUGE_CY = 0.43                         # 고리 중심의 세로 위치(0=위, 1=아래)
+GAUGE_LOGO_RATIO = 0.36                 # 로고 한 변 ÷ 패널 가로
+GAUGE_LOGO_ANGLE = -6                   # 로고 종이 기울기(도)
+GAUGE_RADII = (0.275, 0.385, 0.495)     # 안쪽 점선 고리, 가운데 굵은 호, 바깥 가는 호의 반지름 ÷ 패널 가로
+GAUGE_ARCS = (("#1B8A80", 196), ("#E28F3C", 84), ("#C4474A", 66))   # 굵은 호의 (색, 각도)
+GAUGE_ARC_GAP = 7                       # 호 사이 틈(도)
+GAUGE_ARC_START = -90                   # 첫 호 시작 각도(위쪽)
+GAUGE_ARC_W = 20                        # 굵은 호 두께(px, 가로 900 기준)
+GAUGE_BORDER = (18, 28, 114, 70)
+_GAUGE_CACHE = {}
+
+
+def make_gauge_png(w_pt, h_pt):
+    """진단 엠블럼 그림(PNG 바이트). w_pt:h_pt 비율대로 만들며 같은 크기는 한 번만 만든다."""
+    from PIL import Image as PI, ImageDraw, ImageFilter
+    W = GAUGE_PX_W
+    H = max(int(round(W * h_pt / w_pt)), 200)
+    key = (W, H)
+    if key in _GAUGE_CACHE:
+        return _GAUGE_CACHE[key]
+    k = W / 900.0
+    SS = 2                                                           # 2배로 그린 뒤 줄여 선을 부드럽게
+    w2, h2 = W * SS, H * SS
+    top, bot = GAUGE_BG_TOP, GAUGE_BG_BOTTOM
+    bg = PI.new("RGBA", (1, h2))
+    for y in range(h2):
+        t = y / max(h2 - 1, 1)
+        bg.putpixel((0, y), tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)) + (255,))
+    panel = bg.resize((w2, h2))
+    cx, cy = w2 // 2, int(h2 * GAUGE_CY)
+    ov = PI.new("RGBA", (w2, h2), (0, 0, 0, 0))
+    d = ImageDraw.Draw(ov)
+    r_in, r_mid, r_out = [int(r * w2) for r in GAUGE_RADII]
+    # 바깥: 가는 남색 호 (위쪽이 끊기지 않게 거의 한 바퀴, 한 군데만 비움)
+    d.arc((cx - r_out, cy - r_out, cx + r_out, cy + r_out), start=-70, end=215, fill=(18, 28, 114, 70), width=int(3 * k * SS))
+    d.arc((cx - r_out, cy - r_out, cx + r_out, cy + r_out), start=235, end=250, fill=(18, 28, 114, 70), width=int(3 * k * SS))
+    # 가운데: 굵은 세 호
+    ang = GAUGE_ARC_START
+    aw = int(GAUGE_ARC_W * k * SS)
+    for col, deg in GAUGE_ARCS:
+        rgb = tuple(int(col[i:i + 2], 16) for i in (1, 3, 5))
+        d.arc((cx - r_mid, cy - r_mid, cx + r_mid, cy + r_mid), start=ang, end=ang + deg, fill=rgb + (235,), width=aw)
+        ang += deg + GAUGE_ARC_GAP
+    # 안쪽: 점선 고리 (작은 점 60개)
+    import math
+    for i in range(60):
+        a = math.radians(i * 6)
+        px, py = cx + r_in * math.cos(a), cy + r_in * math.sin(a)
+        rr = int(3.2 * k * SS)
+        d.ellipse((px - rr, py - rr, px + rr, py + rr), fill=(18, 28, 114, 90))
+    # 초록 새싹 점 3개 (로고 새싹 색)
+    for ang_d, rad_, rr in ((-40, r_out, 11), (150, r_out, 8), (35, r_in, 9)):
+        a = math.radians(ang_d)
+        px, py, rr = cx + rad_ * math.cos(a), cy + rad_ * math.sin(a), int(rr * k * SS)
+        d.ellipse((px - rr, py - rr, px + rr, py + rr), fill=(76, 187, 76, 255))
+    panel = PI.alpha_composite(panel, ov).resize((W, H), PI.LANCZOS)
+    cx, cy = W // 2, int(H * GAUGE_CY)
+    # 로고 뒤 흰 원 (고리 안을 차분하게)
+    glow = PI.new("RGBA", (W, H), (0, 0, 0, 0))
+    rg = int(GAUGE_RADII[0] * W) - int(12 * k)
+    ImageDraw.Draw(glow).ellipse((cx - rg, cy - rg, cx + rg, cy + rg), fill=(255, 255, 255, 235))
+    panel.alpha_composite(glow)
+    # 중심: logo_square 종이 (크기만 조절)
+    logo = embedded_pil("logo_square").convert("RGBA")
+    lpx = int(W * GAUGE_LOGO_RATIO)
+    pad = int(20 * k)
+    sz = lpx + 2 * pad
+    paper = PI.new("RGBA", (sz, sz), (0, 0, 0, 0))
+    ImageDraw.Draw(paper).rounded_rectangle((0, 0, sz - 1, sz - 1), radius=int(24 * k), fill=(255, 255, 255, 255))
+    paper.alpha_composite(logo.resize((lpx, lpx), PI.LANCZOS), (pad, pad))
+    paper = paper.rotate(GAUGE_LOGO_ANGLE, resample=PI.BICUBIC, expand=True)
+    sh = PI.new("RGBA", paper.size, (30, 45, 90, 0))
+    sh.putalpha(paper.split()[3].point(lambda v: int(v * 0.42)))
+    blur = int(24 * k)
+    big = PI.new("RGBA", (paper.width + 6 * blur, paper.height + 6 * blur), (0, 0, 0, 0))
+    big.alpha_composite(sh, (3 * blur, 3 * blur))
+    big = big.filter(ImageFilter.GaussianBlur(blur))
+    panel.alpha_composite(big, (cx - big.width // 2, cy - big.height // 2 + int(30 * k)))
+    panel.alpha_composite(paper, (cx - paper.width // 2, cy - paper.height // 2))
+    # 틀: 둥근 모서리 + 가는 테두리 선
+    rad = int(34 * k)
+    mask = PI.new("L", (W, H), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, W - 1, H - 1), radius=rad, fill=255)
+    out = PI.new("RGBA", (W, H), (0, 0, 0, 0))
+    out.paste(panel, (0, 0), mask)
+    ImageDraw.Draw(out).rounded_rectangle((1, 1, W - 2, H - 2), radius=rad, outline=GAUGE_BORDER, width=max(int(3 * k), 1))
+    buf = io.BytesIO()
+    out.save(buf, "PNG")
+    _GAUGE_CACHE[key] = buf.getvalue()
+    return _GAUGE_CACHE[key]
 
 
 class SquareEmblem(Flowable):
@@ -19562,7 +19687,7 @@ def draw_footer(canvas, doc):
     canvas.saveState()
     canvas.setStrokeColor(colors.HexColor("#D1D5DB"))
     canvas.line(mx, ly, pw - mx, ly)
-    canvas.setFont(FONT, 7.5)
+    canvas.setFont(FONT_B if BOLD_ALL else FONT, 7.5)
     canvas.setFillColor(GRAY)
     if FOOTER_TEXT_SHOW:
         canvas.drawString(mx, ly - 4 * mm, doc.footer_left)
@@ -19904,6 +20029,61 @@ def _front_pages(e):
     return e["n"] == 1
 
 
+TOC_STANDARD = ("표지", "Pride of KYOBO", "유의사항", "보험 가입 현황", "세대 보장요약", "종합요약", "세대 분석", "상품별 분석",
+                "신체부위별 보장현황", "보장밸런스(그래프)", "연령별 분석", "보장항목별 분석", "타사 상품별 가입 현황", "보장 제안",
+                "보장 제안 전/후 비교", "상품별 분석 전/후 비교", "연령별 분석 전/후 비교", "신체부위별 보장현황 전/후 비교",
+                "보장밸런스(그래프) 전/후 비교", "컨설팅 종합의견")   # 1.53: 기준 목차 1~20번 (앞으로 고르는 모든 문서는 이 안에 있다)
+TOC_ALIAS = {"아무것도 하지 않으면 아무일도 일어나지 않는다.": "Pride of KYOBO", "보장밸런스": "보장밸런스(그래프)",
+             "보장밸런스 전/후 비교": "보장밸런스(그래프) 전/후 비교", "보장밸런스 전/후비교": "보장밸런스(그래프) 전/후 비교",
+             "전/후 비교": "보장 제안", "세대 보장 제안 전/후 비교": "보장 제안 전/후 비교",
+             "신체부위별 보장현황 전/후비교": "신체부위별 보장현황 전/후 비교"}
+_TOC_PERSON = re.compile(r"^[^\s]{1,8}\s?(?:고객님|님)(?:의|을 위한|을 위해|께)\s*")
+
+
+def toc_name(title):
+    """1.51: 쪽 이름에서 `(1/6)` · `1/6` 같은 쪽 순서 표시와 뒤따르는 부제를 떼고 목차 이름만 돌려준다.
+    예) `상품별 분석 (4/6) 항암·수술` → `상품별 분석`, `보장 제안 전/후 비교 3/6` → `보장 제안 전/후 비교`."""
+    t = re.sub(r"\s*\(\s*\d+\s*/\s*\d+\s*\).*$", "", title or "")
+    t = re.sub(r"\s+\d+\s*/\s*\d+\s*$", "", t)
+    t = _TOC_PERSON.sub("", t.strip())                         # 1.52: `우성래님의 `, `우성래 고객님을 위한 ` 같은 고객 이름 앞말은 사람마다 달라서 뗀다
+    t = t.strip() or (title or "").strip()
+    return TOC_ALIAS.get(t, t)
+
+
+def toc_lines(entries):
+    """1.51: 이름이 같은 쪽(1/6, 2/6 …)은 한 줄로 합친 목차. 이어진 쪽만 합치고 쪽 번호는 `p.6~7`(연속) 또는 `p.6, 9`(떨어진 쪽)로 쓴다.
+    쪽 수는 사람마다 달라지므로 같은 이름은 중복 없이 한 번만 나온다. 반환: [(쪽 표기, 이름, 방식, 메모)]"""
+    groups = []
+    for e in entries:
+        name = toc_name(e["title"])
+        if groups and groups[-1]["name"] == name and e["n"] == groups[-1]["pages"][-1] + 1:
+            g = groups[-1]
+        else:
+            g = dict(name=name, pages=[], modes=[], notes=[])
+            groups.append(g)
+        g["pages"].append(e["n"])
+        if e["mode"] not in g["modes"]:
+            g["modes"].append(e["mode"])
+        if e.get("note") and e["note"] not in g["notes"]:
+            g["notes"].append(e["note"])
+    out = []
+    for g in groups:
+        p = g["pages"]
+        label = f"p.{p[0]}" if len(p) == 1 else f"p.{p[0]}~{p[-1]}"
+        out.append((label, g["name"], "/".join(g["modes"]), " / ".join(g["notes"])))
+    return out
+
+
+def toc_extra(entries):
+    """1.52: 기준 목차(TOC_STANDARD 14항목)에 없는 항목의 (목차 이름, 쪽 표기) 목록."""
+    return [(name, label) for label, name, _m, _n in toc_lines(entries) if name not in TOC_STANDARD]
+
+
+def toc_no(name):
+    """1.53: 기준 목차 번호(1~20). 기준에 없으면 None."""
+    return TOC_STANDARD.index(name) + 1 if name in TOC_STANDARD else None
+
+
 def convert(src, out):
     """PDF 한 개를 분석 PDF(주 결과)와 요약 PDF 로 변환한다. out = 분석 PDF 경로. 진행 내용은 print 로 알린다.
     -> dict(main=주 결과 경로, analysis=분석 PDF 경로 또는 None, summary=요약 PDF 경로 또는 None, n_ana, n_sum, n_src)"""
@@ -19917,8 +20097,12 @@ def convert(src, out):
         res["n_src"] = n_src
         entries, ctx = analyze_pdf(pdf)
         print(f"[원본] {n_src}쪽 — 쪽별 처리")
-        for e in entries:
-            print(f"  p.{e['n']:>2}  {e['title']}  [{e['mode']}]" + (f"  ※ {e['note']}" if e["note"] else ""))
+        for label, name, mode, note in toc_lines(entries):      # 1.51: 이름이 같은 쪽은 한 줄, 1.53: 기준 목차 번호(1~20)
+            no = toc_no(name)
+            print(f"  {(str(no) + '.') if no else '기준 외':>5} {name}  (원본 {label})  [{mode}]" + (f"  ※ {note}" if note else ""))
+        extra = toc_extra(entries)
+        if extra:
+            print(f"[목차] 기준 {len(TOC_STANDARD)}항목에 없는 항목: " + ", ".join(f"{n}(원본 {lb})" for n, lb in extra))
         _prepare(entries, ctx)
         # 1) 분석 PDF — 제일 우선. 만들지 못하면 오류로 멈춘다.
         # 맨 앞 1·2쪽(표지, 계약 및 납입현황)은 수정 전과 똑같은 요약 쪽, 그 뒤에 분석 쪽
@@ -20325,8 +20509,9 @@ def analysis_slides(entries, ctx):
     if plan_:
         slides.append(plan_)
     # 1.28: 원본 쪽 순서대로 정렬(같은 구간 안에서는 만든 순서 유지). 3쪽 → 4~7쪽 → 8쪽 → 9~10쪽 → 11~24쪽 → 25쪽 → 정리자 제안
-    src_order = {"score": 0, "summary": 1, "area": 1, "diag": 1, "death": 1, "chemo": 1, "uncovered": 1, "stable": 1, "contracts": 2,
-                 "bodymap": 3, "stablechart": 1, "enroll": -1, "ages": 4, "agetable": 4, "other": 5, "proposal": 6, "plan": 7}
+    # 1.53: 기준 목차 순서 — 5 세대 보장요약(summary) → 6 종합요약(score) → 7 세대 분석(area) → 8 상품별 분석(diag … contracts)
+    src_order = {"enroll": -1, "summary": 0, "score": 1, "area": 2, "diag": 2, "death": 2, "chemo": 2, "uncovered": 2, "stable": 2,
+                 "stablechart": 2, "contracts": 3, "bodyfig": 4, "bodymap": 4, "ages": 5, "agetable": 5, "other": 6, "proposal": 7, "plan": 8}
     slides.sort(key=lambda s_: src_order.get(s_["kind"], 1))
     return slides
 
@@ -20340,7 +20525,7 @@ BASE_SRC = (15, 16, 16.5, 17, 18)   # 1.47: 예전에 본문·표·축 글로 �
 def _fs(size, bold=False):
     """1.47: 글꼴 크기 규칙. (크기, 굵게) 를 돌려준다. 이미 규칙을 거친 값은 다시 넣지 않는다."""
     if size == NOTE_SRC:
-        return NOTE_FS, False
+        return NOTE_FS, bold or BOLD_ALL
     if size in BASE_SRC:
         return BASE_FS, bold
     return size, bold
@@ -20386,9 +20571,10 @@ class Deck:
         c.restoreState()
 
     def _font(self, s, bold):
+        bold = bold or BOLD_ALL
         miss = bool(GLYPHS) and any(ord(ch) >= 128 and ord(ch) not in GLYPHS for ch in s)
         font = CID_FALLBACK if miss else (FONT_B if bold else FONT)
-        return font, bold and (miss or FONT_B == FONT)
+        return font, bold and (miss or FONT_B == FONT or BOLD_FAKE)
 
     def width(self, s, size, bold=False, _raw=True):
         if _raw:
@@ -20421,7 +20607,7 @@ class Deck:
     def para(self, x, y, w, spans, size, color, lead=1.42):
         """여러 줄 글. spans = [(글, 굵게)]. 단어 단위로 줄을 나눈다. 마지막 줄 아래 y 를 돌려준다."""
         toks = []
-        if size == NOTE_SRC:                                 # 1.47: 주석·보조 설명은 굵게 없이
+        if size == NOTE_SRC and not BOLD_ALL:                # 1.47: 주석·보조 설명은 굵게 없이 (1.49: 모두 굵게일 때는 제외)
             spans = [(t, False) for t, b in spans]
         size = _fs(size)[0]
         for t, b in spans:
@@ -20557,21 +20743,26 @@ def _draw_slide(D, s, n, N, ctx):
     _slide_frame(D, s, n, N, ctx.get("name", ""), ctx.get("basis", ""))
     k = s["kind"]
     if k == "summary":
+        # 1.50: 2쪽과 같은 배치 — 본문은 왼쪽 2/3, 오른쪽 1/3 에 진단 엠블럼(새 로고 디자인)
+        pw, ph = 470.0, 540.0
+        png = make_gauge_png(pw * D.K, ph * D.K)
+        D.c.drawImage(ImageReader(io.BytesIO(png)), D.X(918), D.Y(196 + ph), width=pw * D.K, height=ph * D.K, mask="auto")
+        cw_, gp_ = 262, 19
         for i, (lab, val, tc, bc, desc) in enumerate(s["cards"]):
-            x = 67 + i * 453
-            D.box(x, 200, 416, 204, fill=AN_CARD, stroke=AN_CARD_LINE, r=10, lw=2)
-            D.box(x + 30, 235, 14, 14, fill=bc, r=7)
-            D.text(x + 52, 250, lab, 17, "#374151")
+            x = 67 + i * (cw_ + gp_)
+            D.box(x, 196, cw_, 230, fill=AN_CARD, stroke=AN_CARD_LINE, r=10, lw=2)
+            D.box(x + 22, 228, 14, 14, fill=bc, r=7)
+            D.text(x + 44, 243, lab, 17, "#374151")
             wv = D.width(str(val), 66, True) + 4 + D.width("개", 30, True)      # 1.34: 카드 숫자는 오른쪽 정렬
-            xe = D.text(x + 416 - 30 - wv, 322, str(val), 66, tc, True)
-            D.text(xe + 4, 322, "개", 30, tc, True)
-            D.para(x + 30, 352, 360, [(desc, False)], 14, "#374151")
-        D.text(67, 452, "보장 상태", 16, "#1F2937", True)
+            xe = D.text(x + cw_ - 22 - wv, 318, str(val), 66, tc, True)
+            D.text(xe + 4, 318, "개", 30, tc, True)
+            D.para(x + 22, 356, cw_ - 44, [(desc, False)], 14, "#374151", 1.3)
+        D.text(67, 468, "보장 상태", 16, "#1F2937", True)
         vmax = max(20, _nice_max(max(b[1] for b in s["bars"])))
-        D.hbars(67, 470, 770, [(a, b_, c_, t_) for a, b_, c_, t_ in s["bars"]], vmax, 2 if vmax <= 20 else 5, "항목 수 (개)", 90, 40, 18)
-        D.box(918, 408, 470, 290, fill=AN_BOX, r=12)
-        D.text(950, 505, "분석 인사이트", 27, AN_INK, True)
-        D.para(950, 548, 410, s["insight"], 23, AN_INK, 1.5)
+        D.hbars(67, 486, 470, [(a, b_, c_, t_) for a, b_, c_, t_ in s["bars"]], vmax, 5, "항목 수 (개)", 80, 40, 18)
+        D.box(565, 454, 324, 290, fill=AN_BOX, r=12)
+        D.text(590, 504, "분석 인사이트", 24, AN_INK, True)
+        D.para(590, 546, 276, s["insight"], 19, AN_INK, 1.5)
     elif k in ("diag", "death"):
         ch = s["chart"]
         x = D.chip(67, 200, AN_C_NEED, "필요액 (만원)")
@@ -20682,6 +20873,8 @@ def _draw_slide(D, s, n, N, ctx):
         if not rows_:
             D.para(950, 326, 410, [("다른 슬라이드에서 다루지 않은 부족 항목 없음.", False)], 20, AN_INK)
         D.para(950, 326 + max(len(rows_), 1) * 40 + 14, 410, [(s["note"], False)], 14, AN_GRAY, 1.4)
+    elif k == "bodyfig":
+        _draw_bodyfig(D, s)
     elif k in X_KINDS:
         _draw_extra(D, s)
     elif k == "plan":
@@ -20721,7 +20914,7 @@ def _draw_slide(D, s, n, N, ctx):
 #     (안정 영역)                  → stablechart  적정 항목 필요/준비 막대 + 준비율 표
 #   고정값: 원 ÷ 10,000 = 만원(나누어떨어질 때만), 막대 수 8개 이하 34px·10개 이하 30px·초과 26px, X_OTHER_MAX_ROWS=16.
 # ----------------------------------------------------------------------------
-X_KINDS = ("enroll", "score", "bodymap", "contracts", "agetable", "other", "proposal", "stablechart")
+X_KINDS = ("enroll", "score", "bodyfig", "bodymap", "contracts", "agetable", "other", "proposal", "stablechart")
 X_CONTRACTS_PER_SLIDE = 3         # 계약별 보장 슬라이드 한 장에 올리는 계약 수
 X_OTHER_MAX_ROWS = 16             # 타사 가입 현황 슬라이드 표에 올리는 보장항목 수 (금액 큰 순, 좌우 2열)
 X_AGE_NOTE = "직전 연령 대비: 초록 = 늘어난 값, 주황 = 줄어든 값, 빨강 = 사라진 보장"
@@ -20877,6 +21070,118 @@ def bodymap_slide(entries):
                 quotes=[amt for _, _, amt, _ in have])
 
 
+def bodyfig_slide(entries):
+    """1.55: 원본 신체부위별 보장현황(사람 그림 + 연결선 + 18개 항목 금액) 쪽. 그림·항목·금액은 요약 PDF와 같은 BodyMap 을 쓴다."""
+    e = next((x for x in entries if x["kind"] == "body" and x["mode"] == "전용"), None)
+    if not e:
+        return None
+    body = e["data"]["body"]
+    cnt = {"충분": 0, "부족": 0, "미보장": 0}
+    for g, labs in BODY_GROUPS:
+        for lab in labs:
+            cnt[body[lab][1]] += 1
+    return dict(kind="bodyfig", label="신체부위별 보장현황", headline="신체부위별 보장현황",
+                sub=f"충분 {cnt['충분']}개, 부족 {cnt['부족']}개, 미보장 {cnt['미보장']}개 (단위 만원)", body=body,
+                quotes=[body[lab][0] for _, labs in BODY_GROUPS for lab in labs])
+
+
+# ---- 1.57: 신체부위별 보장현황 쪽 새 디자인 (그림·글꼴·색 모두 코드로 새로 그린다) -----------------------
+BF_INK = "#0A0A0A"                                   # 항목명 글자색 (거의 검정)
+BF_TEXT = {"충분": "#00574B", "부족": "#374151", "미보장": "#A80F0F"}      # 금액 글자색(진하게)
+BF_PILL = {"충분": "#00897B", "부족": "#6B7280", "미보장": "#D32F2F"}      # 상태 알약 바탕색
+BF_ROWBG = {"충분": "#DDF3EF", "부족": "#E5E7EB", "미보장": "#FBDADA"}    # 항목 줄 바탕색
+BF_HEAD = "#1F3F7A"                                  # 영역 머리글 바탕
+BF_ROW_H, BF_HEAD_H, BF_GAP = 42, 36, 12
+BF_COL_W = 403
+BF_LEFT_X, BF_RIGHT_X = 67, 918
+BF_TOP = 196
+BF_CX = 694                                          # 인체 그림 가운데 x
+BF_LEFT = [("뇌", ["뇌출혈", "뇌경색", "뇌혈관질환", "산정특례(뇌)"]), ("암", ["일반암", "고액암", "소액암", "표적항암"]), ("당뇨", ["당뇨"])]
+BF_RIGHT = [("치매", ["LTC(치매)", "중등도치매", "경도치매"]), ("심장", ["급성심근경색", "허혈성심장질환", "산정특례(심장)"]),
+            ("말기 장기질환", ["말기폐질환", "말기간질환", "말기신부전증"])]
+# 연결선이 닿는 몸의 점(디자인 좌표). 키: 영역 이름 또는 항목 이름
+BF_TARGET = {"뇌": (BF_CX, 236), "암": (BF_CX - 6, 560), "당뇨": (BF_CX - 83, 590), "치매": (BF_CX + 30, 214), "심장": (BF_CX + 14, 400),
+             "말기폐질환": (BF_CX + 52, 372), "말기간질환": (BF_CX - 34, 468), "말기신부전증": (BF_CX + 34, 508)}
+
+
+def _bf_shape(D, kind, a, b, c_, d_, fill, stroke=None, lw=2):
+    cv = D.c
+    cv.saveState()
+    cv.setFillColor(colors.HexColor(fill))
+    if stroke:
+        cv.setStrokeColor(colors.HexColor(stroke))
+        cv.setLineWidth(lw * D.K)
+    x, y, w, h = D.X(a), D.Y(b + d_), c_ * D.K, d_ * D.K
+    if kind == "ell":
+        cv.ellipse(x, y, x + w, y + h, fill=1, stroke=1 if stroke else 0)
+    else:
+        cv.roundRect(x, y, w, h, min(w, h) / 2 * 0.9 if kind == "pill" else 14 * D.K, fill=1, stroke=1 if stroke else 0)
+    cv.restoreState()
+
+
+def _bf_figure(D):
+    cx = BF_CX
+    body, edge = "#D5DDEA", "#9FB0C8"
+    for a, b, w, h in ((cx - 100, 318, 34, 290), (cx + 66, 318, 34, 290)):                  # 팔
+        _bf_shape(D, "pill", a, b, w, h, body, edge)
+    for a in (cx - 66, cx + 4):                                                              # 다리
+        _bf_shape(D, "pill", a, 540, 62, 214, body, edge)
+    _bf_shape(D, "rr", cx - 78, 296, 156, 290, body, edge)                                  # 몸통
+    _bf_shape(D, "rr", cx - 16, 262, 32, 50, body, edge)                                    # 목
+    _bf_shape(D, "ell", cx - 46, 192, 92, 96, body, edge)                                   # 머리
+    # 장기 (진한 색으로 또렷하게)
+    _bf_shape(D, "ell", cx - 30, 208, 60, 42, "#4FA3D9", "#2B6FA3", 1.5)                    # 뇌
+    _bf_shape(D, "ell", cx + 10, 330, 56, 92, "#7CC6D2", "#3D8E9C", 1.5)                    # 오른 폐
+    _bf_shape(D, "ell", cx - 14, 384, 38, 40, "#D9363E", "#8F1A20", 1.5)                    # 심장
+    _bf_shape(D, "ell", cx - 62, 446, 70, 38, "#C98A2B", "#8A5A12", 1.5)                    # 간
+    _bf_shape(D, "ell", cx - 40, 494, 24, 38, "#7E57C2", "#4A2F8A", 1.5)                    # 왼 신장
+    _bf_shape(D, "ell", cx + 18, 494, 24, 38, "#7E57C2", "#4A2F8A", 1.5)                    # 오른 신장
+    _bf_shape(D, "rr", cx - 40, 536, 80, 46, "#F2A65A", "#B86A1B", 1.5)                     # 장(대장)
+
+
+def _draw_bodyfig(D, s):
+    body = s["body"]
+    _bf_figure(D)
+    for side, groups in (("L", BF_LEFT), ("R", BF_RIGHT)):
+        x0 = BF_LEFT_X if side == "L" else BF_RIGHT_X
+        y = BF_TOP
+        for gname, labs in groups:
+            gh = BF_HEAD_H + BF_ROW_H * len(labs)
+            D.box(x0, y, BF_COL_W, gh, fill="#FFFFFF", stroke=BF_HEAD, r=10, lw=2.5)
+            D.box(x0, y, BF_COL_W, BF_HEAD_H, fill=BF_HEAD, r=10)
+            D.box(x0, y + 18, BF_COL_W, BF_HEAD_H - 18, fill=BF_HEAD)
+            D.text(x0 + 16, y + 26, gname, 22, "#FFFFFF", True)
+            rows_y = []
+            for i, lab in enumerate(labs):
+                val, st = body[lab]
+                ry = y + BF_HEAD_H + i * BF_ROW_H
+                rows_y.append(ry + BF_ROW_H / 2)
+                D.box(x0 + 5, ry + 3, BF_COL_W - 10, BF_ROW_H - 6, fill=BF_ROWBG[st], r=6)
+                D.box(x0 + 5, ry + 3, 7, BF_ROW_H - 6, fill=BF_PILL[st], r=3)
+                D.text(x0 + 24, ry + 28, lab, 22, BF_INK, True)
+                D.box(x0 + 222, ry + 8, 74, BF_ROW_H - 16, fill=BF_PILL[st], r=13)
+                D.text(x0 + 259, ry + 27, st, 19, "#FFFFFF", True, "C")
+                D.text(x0 + BF_COL_W - 16, ry + 29, val, 24, BF_TEXT[st], True, "R")
+            # 연결선: 영역 전체 또는 줄마다
+            ex = x0 + BF_COL_W if side == "L" else x0
+            if gname == "말기 장기질환":
+                targets = [(rows_y[i], BF_TARGET[lab]) for i, lab in enumerate(labs)]
+            else:
+                targets = [(y + gh / 2, BF_TARGET[gname])]
+            for sy, (tx, ty) in targets:
+                D.line(ex, sy, tx, ty, "#1F2937", 2.4)
+                D.box(ex - 5, sy - 5, 10, 10, fill="#1F2937", r=5)
+                D.box(tx - 6, ty - 6, 12, 12, fill="#1F2937", stroke="#FFFFFF", r=6, lw=2)
+            y += gh + BF_GAP
+    cn = {"충분": 0, "부족": 0, "미보장": 0}
+    for _g, labs_ in BODY_GROUPS:
+        for lab_ in labs_:
+            cn[body[lab_][1]] += 1
+    xx = 880
+    for st_ in ("충분", "부족", "미보장"):
+        xx = D.chip(xx, 135, BF_PILL[st_], f"{st_} {cn[st_]}개")
+
+
 def contract_slides(entries, ctx):
     sets = {}
     seen = {}
@@ -20997,6 +21302,7 @@ def other_slides(entries):
                 if len(r) >= 8 and re.fullmatch(r"\d+", (r[0] or "").strip()):
                     cur["rows"].append([clean(c) for c in r[:8]])
     slides = []
+    no_body = []                                                  # 1.54: 보장내용이 없어 쪽을 만들지 않은 계약
     for c in cons:
         if c.get("drop"):
             continue
@@ -21008,6 +21314,9 @@ def other_slides(entries):
                 specs.append(last)
             if last is not None and item and _num(iamt):
                 last["items"].append((item, int(_num(iamt)), en))
+        if not any(sp["items"] for sp in specs):                  # 1.54: 분석 보장항목에 연결된 보장금액이 하나도 없으면 쪽을 만들지 않는다(내용 없음)
+            no_body.append(c["name"])
+            continue
         ends = sorted(r[7] for r in c["rows"] if re.fullmatch(r"\d{4}\.\d{2}\.\d{2}", r[7]))
         life = any(r[7] == "종신" for r in c["rows"])
         if not ends and not life:
@@ -21051,6 +21360,8 @@ def other_slides(entries):
                                headline=head_end,
                                sub=f"{c['company']} / 가입 {c['start']} / 조회시점 {c['at']}", bars=bars, cards=cards, note=note.strip(),
                                quotes=[c["start"], e2, c["prem"] + "원"] + ([e1] if e1 != e2 else [])))
+    if no_body:
+        print(f"[안내] 타사 가입 현황: 분석 보장항목에 연결된 보장내용이 없는 계약 {len(no_body)}건은 쪽을 만들지 않았습니다 — " + ", ".join(_short_name(n) for n in no_body))
     return slides
 
 
@@ -21171,7 +21482,7 @@ def extra_slides(entries, ctx, A):
     m = next((re.search(r"\((\d{18,})\)", t) for t in texts if re.search(r"\((\d{18,})\)", t)), None)
     ctx["docno"] = m.group(1) if m else ""
     out = []
-    for fn in (lambda: enroll_slide(entries), lambda: [score_slide(entries)], lambda: contract_slides(entries, ctx), lambda: [bodymap_slide(entries)],
+    for fn in (lambda: enroll_slide(entries), lambda: [score_slide(entries)], lambda: contract_slides(entries, ctx), lambda: [bodyfig_slide(entries)], lambda: [bodymap_slide(entries)],
                lambda: age_table_slides(A), lambda: other_slides(entries), lambda: [proposal_slide(entries)]):
         try:
             out += [s for s in fn() if s]
