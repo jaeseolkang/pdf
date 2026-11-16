@@ -1,4 +1,4 @@
-# 2026-11-16 17:10 KST | 수정: 마지막 쪽 보완 순서를 암 진단비 → 항암 치료비 → 뇌·심장 진단비 → 미보장 순으로 변경(암이 발생·사망이 가장 많고 치료비 부담이 큼), 4단계까지 그릴 수 있게 배치 조정 (APP_VERSION 1.44) | 이전: 일시납 계약 포함(1.43)
+# 2026-11-16 19:50 KST | 수정: 기본 글꼴을 2쪽 표시 글꼴(19, 11.0pt)로 통일하고 주석(※)·보조 설명은 한 단계 작게·굵게 없이 (APP_VERSION 1.47) | 이전: 모든 문장 개조식(1.46)
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -210,7 +210,7 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.44"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.47"        # 이 파일을 수정할 때마다 올린다
 
 # ----------------------------------------------------------------------------
 # 0. 내장 이미지 — 업로드한 원본 파일 4개를 base64 PNG 로 이 파일 안에 담았다. (별도 이미지 파일 불필요)
@@ -15733,7 +15733,7 @@ def story_generic(e):
             for head_n, rows in grids:
                 out += [Spacer(1, 5), grid_table(head_n, rows, W)]
             return out
-        return table_page(e["n"], "내용 정리", e["title"], f"단위: {unit}" if unit else "원본의 표를 그대로 옮겼어요.", [], body)
+        return table_page(e["n"], "내용 정리", e["title"], f"단위: {unit}" if unit else "원본의 표를 그대로 정리", [], body)
     st = page_header(e["title"], e["n"], f"단위: {unit}" if unit else "", WCW)
     nt = _nos(e["title"])
     rest = [l for l in rest if _nos(l) not in nt and nt not in _nos(l)]      # 쪽 제목과 같은 줄은 제외
@@ -19025,13 +19025,13 @@ def enrollment_model(d):
         if it["done"] and type_label(it["c"]) and type_label(it["c"]) not in types:
             types.append(type_label(it["c"]))
     if types:
-        subtitle = f"현재 총 {n}건의 보험 계약을 빈틈없이 유지하고 계시며, 주요 {'·'.join(types)} 계약은 이미 완납되었어요."
+        subtitle = f"현재 총 {n}건의 보험 계약 유지, 주요 {', '.join(types)} 계약 완납"
     elif any(it["done"] for it in items):
-        subtitle = f"현재 총 {n}건의 보험 계약을 빈틈없이 유지하고 계시며, 이미 완납된 계약도 있어요."
+        subtitle = f"현재 총 {n}건의 보험 계약 유지, 완납 계약 포함"
     elif _int(monthly) > 0:
-        subtitle = f"현재 총 {n}건의 보험 계약을 빈틈없이 유지하고 계시며, 월 {monthly}원을 납입 중이에요."
+        subtitle = f"현재 총 {n}건의 보험 계약 유지, 월 {monthly}원 납입 중"
     else:
-        subtitle = f"현재 총 {n}건의 보험 계약을 빈틈없이 유지하고 계세요."
+        subtitle = f"현재 총 {n}건의 보험 계약 유지"
     ing = [it for it in items if not it["done"] and _int(it["c"]["premium"]) > 0]
     card1_sub = ", ".join(short_product(it["c"]["name"]) + (f" (잔여 {it['rem']}회)" if it["rem"] else "") for it in ing) \
         or "납입 중인 계약 없음"
@@ -19044,7 +19044,7 @@ def enrollment_model(d):
                 break
         else:
             groups.append(dict(company=comp, items=[it]))
-    return dict(n=n, monthly=monthly, paid_total=paid_total, title=f"유지 계약 {n}건, 월 보험료는 {monthly}원이에요",
+    return dict(n=n, monthly=monthly, paid_total=paid_total, title=f"유지 계약 {n}건, 월 보험료는 {monthly}원",
                 subtitle=subtitle, card1_sub=card1_sub, card2_sub=f"총 {n}건 계약의 총 납입 완료액",
                 groups=groups, items=items, excluded=excluded)
 
@@ -19256,13 +19256,13 @@ def story_enrollment(d, src, name):
         cmds += [("TOPPADDING", (0, r0), (-1, r0), 6), ("BOTTOMPADDING", (0, r1), (-1, r1), 6),
                  ("LINEBELOW", (0, r1), (-1, r1), 0.6, colors.HexColor("#E1E5EB"))]
     if len(rows) == 1:
-        rows.append([Paragraph("표시할 계약이 없어요", S["en_td"]), "", ""])
+        rows.append([Paragraph("표시할 계약 없음", S["en_td"]), "", ""])
     tb = Table(rows, colWidths=[LW * 0.24, LW * 0.36, LW * 0.40])
     tb.setStyle(TableStyle(cmds))
     st.append(tb)
     if m["excluded"] and ENROLL_SHOW_EXCLUDED_NOTE:
         st += [Spacer(1, 3 * mm),
-               Paragraph(f"※ 월 보험료 0원 · 납입 0회인 계약 {len(m['excluded'])}건은 목록에서 제외했어요.", S["en_note"])]
+               Paragraph(f"※ 월 보험료 0원 · 납입 0회인 계약 {len(m['excluded'])}건은 목록에서 제외.", S["en_note"])]
     body_h = natural_height(st, LW)
     panel = SquareEmblem(CW * (1 - ENROLL_BODY_RATIO), max(body_h, ENROLL_PANEL_MIN_H))
     outer = Table([[st, panel]], colWidths=[CW * ENROLL_BODY_RATIO, CW * (1 - ENROLL_BODY_RATIO)])
@@ -19402,7 +19402,7 @@ def table_page(src, small, title, subtitle, cards, body_fn, emblem=False, notes=
 def story_generation(d, src):
     cnt, members = d["counts"], d["members"]
     n = len(members)
-    names = "·".join(m["name"] for m in members)
+    names = ", ".join(m["name"] for m in members)
     head = ["구분", "항목"] + [f"{esc(m['name'])}<br/>({m['age']}세)" for m in members]
     ra, sa = grouped_rows(GROUPS_A, lambda i, l: [esc(m["a"][i]) for m in members])
     rb, sb = grouped_rows(GROUPS_B, lambda i, l: [esc(m["b"][i]) for m in members])
@@ -19417,8 +19417,8 @@ def story_generation(d, src):
                                                            ("손해보험", "nonlife"), ("공제/우체국", "mutual")))
         cards.append(("유지 계약", cnt["total"], "건", sub))
     cards.append(("분석 구성원", str(n), "명", ", ".join(f"{m['name']} ({m['age']}세)" for m in members)))
-    title = (f"유지 계약 {cnt['total']}건, " if cnt else "") + f"{names} 고객님의 보장 준비 금액이에요"
-    return table_page(src, "세대 분석", title, "가족 구성원별로 각 보장항목이 얼마나 준비되어 있는지 정리했어요. (단위: 만원)",
+    title = (f"유지 계약 {cnt['total']}건, " if cnt else "") + f"{names} 고객님의 보장 준비 금액"
+    return table_page(src, "세대 분석", title, "가족 구성원별 보장항목 준비 금액 (단위: 만원)",
                       cards, body, emblem=False)
 
 
@@ -19460,7 +19460,7 @@ def story_products(d, src, title, labels, groups):
         return [t]
     cards = [(f"분석 항목({scope})", total, "개", f"적정 {ok}개 · 부족 {low}개 · 미보장 {none}개"),
              ("준비된 상품", str(m), "건", " · ".join(short_product(p["name"]) or p["name"] for _, p in shown) or "없음")]
-    return table_page(src, title, f"{scope} {total}개 항목 중 적정 {ok}개, 부족 {low}개, 미보장 {none}개예요",
+    return table_page(src, title, f"{scope} {total}개 항목 중 적정 {ok}개, 부족 {low}개, 미보장 {none}개",
                       "필요 금액과 준비 금액을 항목별로 비교하고, 상품별 준비 금액을 함께 보여 줘요. (단위: 만원)",
                       cards, body, emblem=False)
 
@@ -19484,8 +19484,8 @@ def story_body(d, src):
         rows, spans = grouped_rows(BODY_GROUPS, lambda i, l: [esc(body[l][0]), status_cell(body[l][1])])
         return [list_table(["구분", "항목", "금액", "상태"], rows, wfit([30, 62, 42, 30], W), [0, 0, 2, 1], 8.5, spans)]
     cards = [(lab, str(cnt[lab]), "개", "") for lab in ("충분", "부족", "미보장")]
-    return table_page(src, "신체부위별 보장현황", f"{len(body)}개 항목 중 충분 {cnt['충분']}개, 부족 {cnt['부족']}개, 미보장 {cnt['미보장']}개예요",
-                      "신체 부위별로 준비된 보장 금액을 정리했어요. (단위: 만원)", cards, body_fn, emblem=True)
+    return table_page(src, "신체부위별 보장현황", f"{len(body)}개 항목 중 충분 {cnt['충분']}개, 부족 {cnt['부족']}개, 미보장 {cnt['미보장']}개",
+                      "신체 부위별 준비 보장 금액 (단위: 만원)", cards, body_fn, emblem=True)
 
 
 def age_groups(rows):
@@ -19509,10 +19509,10 @@ def story_ages(title, src, rows, labels, groups):
         table_rows, spans = grouped_rows(groups, lambda i, l: [esc(v[i]) for _, v in ag])
         return [list_table(head, table_rows, wfit([20, 32] + [pw] * g, W), [0, 0] + [2] * g, spans=spans)]
     first, last = rows[0][0], rows[-1][0]
-    cards = [("조회 연령", f"{first} ~ {last}", "", f"{len(rows)}개 연령을 조회했어요"),
+    cards = [("조회 연령", f"{first} ~ {last}", "", f"{len(rows)}개 연령 조회"),
              ("보장 금액 구간", str(g), "개", " / ".join(f"{a[0]}" if len(a) == 1 else f"{a[0]}~{a[-1]}" for a, _ in ag))]
-    ttl = "연령이 바뀌어도 보장 금액이 같아요" if g == 1 else f"연령에 따라 보장 금액이 {g}개 구간으로 달라져요"
-    return table_page(src, title, ttl, "연령에 따라 보장 금액이 어떻게 바뀌는지 정리했어요. (단위: 만원)", cards, body, emblem=emblem)
+    ttl = "연령이 바뀌어도 보장 금액 동일" if g == 1 else f"연령에 따라 보장 금액 {g}개 구간으로 변화"
+    return table_page(src, title, ttl, "연령별 보장 금액 변화 (단위: 만원)", cards, body, emblem=emblem)
 
 
 def _expected_table_numbers(e):
@@ -19553,6 +19553,9 @@ def verify_table_values(pdf_path, entries):
 # ----------------------------------------------------------------------------
 # 6. PDF 조립
 # ----------------------------------------------------------------------------
+FOOTER_TEXT_SHOW = False                       # 1.45: 쪽 아래 안내 문구를 쓰지 않는다(선·쪽 번호는 유지)
+
+
 def draw_footer(canvas, doc):
     pw, ph = canvas._pagesize
     mx, ly = (W_MARGIN_X, 12 * mm) if pw > ph else (MARGIN_X, 14 * mm)
@@ -19561,7 +19564,8 @@ def draw_footer(canvas, doc):
     canvas.line(mx, ly, pw - mx, ly)
     canvas.setFont(FONT, 7.5)
     canvas.setFillColor(GRAY)
-    canvas.drawString(mx, ly - 4 * mm, doc.footer_left)
+    if FOOTER_TEXT_SHOW:
+        canvas.drawString(mx, ly - 4 * mm, doc.footer_left)
     canvas.drawRightString(pw - mx, ly - 4 * mm, f"{canvas.getPageNumber()} / {doc.total_pages}")
     canvas.restoreState()
     pn = canvas.getPageNumber()
@@ -20075,17 +20079,17 @@ def analysis_slides(entries, ctx):
         weak3 = weak_all[:3]
         lowtop = sorted([g for g in order if lowg[g] > 0], key=lambda g: -lowg[g])[:2]
         slides.append(dict(kind="summary", label=f"전체 {total}개 항목 종합 진단",
-                           headline=f"{total}개 항목 중 적정은 {ok}개, 보완이 필요한 항목은 {low + none}개예요",
-                           sub=(f"{'·'.join(strong)} 보장은 탄탄하지만, {'·'.join(weak3)} 등 {low + none}개 항목은 추가 대비가 권장돼요."
-                                if strong else f"{'·'.join(weak3)} 등 {low + none}개 항목은 추가 대비가 권장돼요."),
-                           cards=[("보장 적정", ok, AN_T_OK, AN_C_OK, f"{'·'.join(strong) or '-'} 등 현재 충분히 갖춰진 영역"),
-                                  ("보장 부족", low, AN_T_LOW, AN_C_LOW, f"{'·'.join(lowtop) or '-'} 등 증액 필요"),
+                           headline=f"{total}개 항목 중 적정 {ok}개, 보완 필요 {low + none}개",
+                           sub=(f"{', '.join(strong)} 보장은 탄탄, {', '.join(weak3)} 등 {low + none}개 항목 추가 대비 권장"
+                                if strong else f"{', '.join(weak3)} 등 {low + none}개 항목 추가 대비 권장"),
+                           cards=[("보장 적정", ok, AN_T_OK, AN_C_OK, f"{', '.join(strong) or '-'} 등 현재 충분히 갖춰진 영역"),
+                                  ("보장 부족", low, AN_T_LOW, AN_C_LOW, f"{', '.join(lowtop) or '-'} 등 증액 필요"),
                                   ("미보장", none, AN_T_NONE, AN_C_NONE,
                                    (", ".join(it["label"] for it in uncovered[:3]) + " 등 보장 공백 상태인 항목") if uncovered else "해당 없음")],
                            bars=[("적정", ok, AN_C_OK, "#FFFFFF"), ("부족", low, AN_C_LOW, "#111111"), ("미보장", none, AN_C_NONE, "#FFFFFF")],
                            insight=[("전체 ", False), (f"{total}개", True), (" 분석 항목 중 부족(", False), (f"{low}개", True), (")과 미보장(", False),
-                                    (f"{none}개", True), (")이 도합 ", False), (f"{pct:.1f}%", True), ("를 차지하고 있어요. ", False),
-                                    ("우선순위 중심의 재설계가 필요해요." if pct >= 50 else "부족한 영역만 골라 보완하면 돼요.", False)],
+                                    (f"{none}개", True), (")이 도합 ", False), (f"{pct:.1f}%", True), ("를 차지. ", False),
+                                    ("우선순위 중심 재설계 필요." if pct >= 50 else "부족한 영역만 선별 보완.", False)],
                            quotes=[]))
 
     # 2 핵심 진단비
@@ -20095,11 +20099,11 @@ def analysis_slides(entries, ctx):
         sel = [it for it in items if it in top]                          # 그림은 원본 순서
         r_all = sum(i["np"] for i in sel) / sum(i["nn"] for i in sel) * 100
         rs = [i["np"] / i["nn"] * 100 for i in sel]
-        slides.append(dict(kind="diag", label="핵심 진단비 분석", headline=f"진단비는 필요액의 약 {_rhu(r_all)}%만 준비돼 있어요",
-                           sub=f"{'·'.join(i['label'] for i in sel)} 진단비가 필요 금액 대비 크게 부족해 집중 보완이 시급해요.",
+        slides.append(dict(kind="diag", label="핵심 진단비 분석", headline=f"진단비는 필요액의 약 {_rhu(r_all)}%만 준비",
+                           sub=f"{', '.join(i['label'] for i in sel)} 진단비가 필요 금액 대비 크게 부족, 집중 보완 시급",
                            chart=dict(cats=[i["label"] for i in sel], need=[i["nn"] for i in sel], prep=[i["np"] for i in sel], xlabel="진단비 항목"),
                            table=[(i["label"], f"{i['short']}만원 부족") for i in top],
-                           note=f"단위: 만원 · 필요액 대비 준비액 비율은 {_rhu(min(rs))}~{_rhu(max(rs))}% 수준이에요.",
+                           note=f"단위: 만원 · 필요액 대비 준비액 비율은 {_rhu(min(rs))}~{_rhu(max(rs))}% 수준",
                            quotes=[i["short"] for i in top]))
     # 3 항암 치료비
     chemo = [it for it in items if it["g"] == "항암"]
@@ -20112,11 +20116,11 @@ def analysis_slides(entries, ctx):
             r = _rhu(i["np"] / i["nn"] * 100)
             cards.append((i["label"] + (" 치료" if not i["label"].endswith("치료") and not i["label"].endswith("약물치료") else ""),
                           f"필요 {i['need']} / 준비 {i['prep']}만원",
-                          (f"{i['short']}만원 부족 (준비율 {r}%)" if i["ns"] else "필요액을 충족해요"),
+                          (f"{i['short']}만원 부족 (준비율 {r}%)" if i["ns"] else "필요액 충족"),
                           AN_T_NONE if r < AN_RED_BELOW else AN_T_LOW))
-        names = "·".join(i["label"] for i in rep)
-        slides.append(dict(kind="chemo", label="암 치료 기술별 보장 현황", headline=f"항암 치료비는 필요액의 {rep_r}%만 준비돼 있어요",
-                           sub=f"최신 {names} 등 비급여 치료비 필요액 {rep[0]['need']}만원 중 현재 {rep[0]['prep']}만원만 보장돼요.",
+        names = ", ".join(i["label"] for i in rep)
+        slides.append(dict(kind="chemo", label="암 치료 기술별 보장 현황", headline=f"항암 치료비는 필요액의 {rep_r}%만 준비",
+                           sub=f"최신 {names} 등 비급여 치료비 필요액 {rep[0]['need']}만원 중 현재 {rep[0]['prep']}만원만 보장",
                            chart=dict(cats=[i["label"] for i in chemo], need=[i["nn"] for i in chemo], prep=[i["np"] for i in chemo], xlabel="항암 치료 항목"),
                            cards=cards, quotes=[c for i in chemo for c in (i["need"], i["prep"], i["short"]) if c != "-"], rep=rep, rep_r=rep_r))
     # 4 미보장
@@ -20136,13 +20140,13 @@ def analysis_slides(entries, ctx):
             ins += [("와 ", False), (b["label"], True), (f"({b['need']}만원)", True), (_josa(b["label"], "은", "는") + " ", False)]
         else:
             ins += [(_josa(a["label"], "은", "는") + " ", False)]
-        ins += [("장기 간병 비용 부담이 가장 큰 항목이에요." if care else "필요액이 가장 큰 항목이에요.", False)]
+        ins += [("장기 간병 비용 부담이 가장 큰 항목." if care else "필요액이 가장 큰 항목.", False)]
         slides.append(dict(kind="uncovered", label=f"미보장 {len(uncovered)}개 영역",
-                           headline=f"{'·'.join(names3[:3])} 등 {len(uncovered)}개 항목은 아직 보장이 없어요",
-                           sub=f"{', '.join(it['label'] for it in uncovered[:4])} 등 필요 보장의 준비액이 0원이에요.",
+                           headline=f"{', '.join(names3[:3])} 등 {len(uncovered)}개 항목 보장 없음",
+                           sub=f"{', '.join(it['label'] for it in uncovered[:4])} 등 필요 보장의 준비액 0원",
                            bars=[(AN_DISP.get(it["label"], it["label"]), it["nn"]) for it in uncovered],
                            insight1=ins, insight2=[("현재 가입 계약에는 해당 담보가 전혀 포함되어 있지 않으므로 " +
-                                                    ("노후 간병 대비책" if care else "대비책") + " 검토가 필수적이에요.", False)],
+                                                    ("노후 간병 대비책" if care else "대비책") + " 검토 필수.", False)],
                            quotes=[a["need"]] + ([b["need"]] if b else []), top2=(a, b), care=care))
     # 5 사망 보장
     death = [it for it in items if it["g"] == "사망"]
@@ -20152,7 +20156,7 @@ def analysis_slides(entries, ctx):
         d_r = sum(i["np"] for i in dg) / sum(i["nn"] for i in dg) * 100 if dg else None
         d_all = sum(i["np"] for i in death) / sum(i["nn"] for i in death) * 100
         lead = "기납입 완료된 종신보험 덕분에 " if A["paid_whole_life"] else ""
-        cmp_ = ("사망 보장은 진단비에 비해 양호하게 채워져 있어요." if (d_r is None or d_all > d_r) else "사망 보장도 진단비처럼 보완이 필요해요.")
+        cmp_ = ("사망 보장은 진단비에 비해 양호" if (d_r is None or d_all > d_r) else "사망 보장도 진단비처럼 보완 필요")
         drop_age = None
         s = A["ages"].get(death[0]["label"], {})
         prev = None
@@ -20163,8 +20167,8 @@ def analysis_slides(entries, ctx):
                 break
             prev = v if v is not None else prev
         note = (f"진단비(약 {_rhu(d_r)}%)에 비하면 상대적으로 충실히 준비되어 있으나" if d_r is not None and d_all > d_r else "") + \
-               (f", {drop_age} 이후 감액 구조는 확인할 필요가 있어요." if drop_age else ".")
-        slides.append(dict(kind="death", label="사망 보장 점검", headline=f"사망 보장은 필요액의 {_rhu(min(rs))}~{_rhu(max(rs))}% 수준이에요",
+               (f", {drop_age} 이후 감액 구조 확인 필요" if drop_age else ".")
+        slides.append(dict(kind="death", label="사망 보장 점검", headline=f"사망 보장은 필요액의 {_rhu(min(rs))}~{_rhu(max(rs))}% 수준",
                            sub=lead + cmp_,
                            chart=dict(cats=[i["label"] for i in death], need=[i["nn"] for i in death], prep=[i["np"] for i in death], xlabel="사망 보장 구분"),
                            table=[(i["label"], f"{i['prep']} / {i['need']}", f"{r:.1f}%") for i, r in zip(death, rs)],
@@ -20183,11 +20187,11 @@ def analysis_slides(entries, ctx):
                               foot=("필요액 전액 충족" if full else ("필요액 이상 준비 완료" if minr < 1.1 else f"필요 대비 {int(minr * 10) / 10:.1f}배 이상 준비 완료"))))
         w2 = weak_all[:2]
         wn = [AN_TOPIC.get(g, g) for g in w2]
-        st = "·".join(gs)
-        tail = (f"부족한 {wn[0]}{_josa(wn[0], '과', '와')} {wn[1]} 쪽으로 예산을 집중하는 것이 경제적이에요." if len(wn) == 2
-                else (f"부족한 {wn[0]} 쪽으로 예산을 집중하는 것이 경제적이에요." if wn else "예산 배분을 점검하면 돼요."))
-        slides.append(dict(kind="stable", label=f"안정 영역 (적정 {len(okitems)}개 항목)", headline=f"{st}{_josa(st, '은', '는')} 충분해서 짧게 짚어요",
-                           sub=f"{st}{_josa(st, '은', '는')} 필요 기준 이상 준비되어 있어 추가 지출을 줄여도 되는 안전 지대예요.", cards=cards,
+        st = ", ".join(gs)
+        tail = (f"부족한 {wn[0]}{_josa(wn[0], '과', '와')} {wn[1]} 쪽으로 예산 집중이 경제적." if len(wn) == 2
+                else (f"부족한 {wn[0]} 쪽으로 예산 집중이 경제적." if wn else "예산 배분 점검"))
+        slides.append(dict(kind="stable", label=f"안정 영역 (적정 {len(okitems)}개 항목)", headline=f"{st} 충분, 간단 점검",
+                           sub=f"{st}{_josa(st, '은', '는')} 필요 기준 이상 준비, 추가 지출을 줄여도 되는 안전 영역", cards=cards,
                            point=[("설계 포인트: ", True), (f"{st} 담보는 이미 충분하므로, 신규 가입 시 중복 투자를 피하고 " + tail, False)],
                            quotes=[v for c in cards for (_, p, n) in c["lines"] for v in (p, n)]))
     # 7 연령별 변화
@@ -20231,8 +20235,8 @@ def analysis_slides(entries, ctx):
             nm = c3["it"]["label"].split("(")[0]
             cards.append(dict(title="입원 일당 소폭 증가", l1=f"{nm} 일당은 {c3['a_to']} 이후", l2=f"{c3['v_from']}만원 → {c3['v_to']}만원으로 증가"))
             quotes += [c3["v_from"], c3["v_to"]]
-        slides.append(dict(kind="ages", label="연령별 보장 변화", headline=f"연령이 들면 {c1['it']['g']}보장이 {'크게 ' if big else ''}줄어요",
-                           sub=f"{c1['a_from']} 이후 {c1['a_to']}에 도달하면 {c1['it']['label']} 보장금액이 기존의 약 {pct}% 수준으로 축소돼요.",
+        slides.append(dict(kind="ages", label="연령별 보장 변화", headline=f"연령 증가 시 {c1['it']['g']}보장 {'크게 ' if big else ''}감소",
+                           sub=f"{c1['a_from']} 이후 {c1['a_to']}에 도달하면 {c1['it']['label']} 보장금액 기존의 약 {pct}% 수준으로 축소",
                            chart=dict(cats=cats, vals=vals, title=f"{c1['it']['label']} 보장금액 (만원)", xlabel="연령 구간"), cards=cards, quotes=quotes))
     # 2 영역별 보장 준비 현황 (세대 분석 쪽을 대신함): 영역마다 Σmin(준비,필요) ÷ Σ필요, 다른 슬라이드에서 다루지 않은 부족 항목을 함께 정리
     area = []
@@ -20248,14 +20252,14 @@ def analysis_slides(entries, ctx):
         def _pr(r):
             return min(_rhu(r), 99) if r < 100 else _rhu(r)
         if nfull == len(area):
-            head_ = f"{len(area)}개 보장 영역 모두 필요액을 채웠어요"
+            head_ = f"{len(area)}개 보장 영역 모두 필요액 충족"
         elif nfull == 0:
-            head_ = f"{len(area)}개 보장 영역 모두 보완이 필요해요"
+            head_ = f"{len(area)}개 보장 영역 모두 보완 필요"
         else:
-            head_ = f"{len(area)}개 보장 영역 중 필요액을 모두 채운 영역은 {nfull}개예요"
+            head_ = f"{len(area)}개 보장 영역 중 필요액을 모두 채운 영역 {nfull}개"
         lows_ = [a_ for a_ in asc if a_["rate"] < 100][:3]
-        sub_ = ("준비율이 낮은 영역은 " + ", ".join(f"{AN_TOPIC.get(a_['g'], a_['g'])} {_pr(a_['rate'])}%" for a_ in lows_) + " 순이에요."
-                if lows_ else "모든 영역의 준비율이 100% 이상이에요.")
+        sub_ = ("준비율이 낮은 영역은 " + ", ".join(f"{AN_TOPIC.get(a_['g'], a_['g'])} {_pr(a_['rate'])}%" for a_ in lows_) + " 순"
+                if lows_ else "모든 영역의 준비율 100% 이상")
         bars_ = []
         for a_ in asc:
             col_ = AN_C_NONE if a_["rate"] < AN_RED_BELOW else (AN_C_LOW if a_["rate"] < 100 else AN_C_OK)
@@ -20270,7 +20274,7 @@ def analysis_slides(entries, ctx):
         who_ = f" · {mem_[0]['name']} ({mem_[0]['age']}세)" if len(mem_) == 1 else ""
         more_ = len(extra) - len(rows_)
         slides.insert(1, dict(kind="area", label="영역별 보장 준비 현황" + who_, headline=head_, sub=sub_, bars=bars_, rows=rows_, more=more_,
-                              note="※ 다른 슬라이드에서 다루지 않은 부족 항목이에요. 준비율이 낮은 순이며 단위는 만원이에요." + (f" 외 {more_}개가 더 있어요." if more_ > 0 else ""),
+                              note="※ 다른 슬라이드에서 다루지 않은 부족 항목. 준비율 낮은 순, 단위 만원." + (f" 외 {more_}개 항목." if more_ > 0 else ""),
                               quotes=[v for r_ in rows_ for v in r_[1].split(" / ")] + ([mem_[0]["age"]] if len(mem_) == 1 else [])))
     # 8 보완 순서
     steps = []
@@ -20303,10 +20307,10 @@ def analysis_slides(entries, ctx):
     if steps:
         ymd = re.match(r"(\d{4})-(\d{1,2})-(\d{1,2})", basis or "")
         when = f"{int(ymd.group(1))}년 {int(ymd.group(2))}월 {int(ymd.group(3))}일" if ymd else (basis or "")
-        caution = [("확인할 점: ", True), ((f"수치는 {when} 기준이며 " if when else "수치는 ") + "약관, 증권과 다를 수 있어요." +
-                                          (" 1년 이내 가입 상품은 50% 감액될 수 있어요." if A["foot50"] else ""), False)]
+        caution = [("확인할 점: ", True), ((f"수치는 {when} 기준이며 " if when else "수치는 ") + "약관, 증권과 다를 수 있음." +
+                                          (" 1년 이내 가입 상품은 50% 감액 가능." if A["foot50"] else ""), False)]
         slides.append(dict(kind="plan", label="보완 순서 제안 & 유의사항", headline="보완 순서 제안과 확인할 점",
-                           sub=("암은 발생과 사망이 가장 많고 치료비 부담이 커서 먼저 두었어요. 순서는 정리자의 제안이에요." if cancer_d or any(s_[0].startswith("항암") for s_ in steps) else "보완 순서는 정리자의 제안이에요."),
+                           sub=("암은 발생과 사망이 가장 많고 치료비 부담이 커 우선 배치. 순서는 정리자 제안." if cancer_d or any(s_[0].startswith("항암") for s_ in steps) else "보완 순서는 정리자 제안."),
                            steps=steps, caution=caution, quotes=[q for s_ in steps for q in s_[2]]))
     for s_ in slides:                                            # 1.29: 안정 영역도 그래프+표 형식으로
         if s_["kind"] == "stable":
@@ -20314,7 +20318,7 @@ def analysis_slides(entries, ctx):
             if ok_:
                 s_.update(kind="stablechart", chart=dict(cats=[i["label"] for i in ok_], need=[i["nn"] for i in ok_], prep=[i["np"] for i in ok_], xlabel="적정 항목"),
                           table=[(i["label"], f"{i['prep']} / {i['need']}", f"{i['np'] / i['nn'] * 100:.1f}%") for i in ok_],
-                          note="단위는 만원이에요. 필요액 이상 준비돼 추가 지출을 줄여도 되는 항목이에요.",
+                          note="단위 만원. 필요액 이상 준비, 추가 지출을 줄여도 되는 항목.",
                           quotes=[v for i in ok_ for v in (i["prep"], i["need"])])
     plan_ = slides.pop() if slides and slides[-1]["kind"] == "plan" else None
     slides += extra_slides(entries, ctx, A)                      # 1.27: 원본 나머지 쪽(3, 4~7, 8, 9~10, 11~24, 25쪽)
@@ -20325,6 +20329,21 @@ def analysis_slides(entries, ctx):
                  "bodymap": 3, "stablechart": 1, "enroll": -1, "ages": 4, "agetable": 4, "other": 5, "proposal": 6, "plan": 7}
     slides.sort(key=lambda s_: src_order.get(s_["kind"], 1))
     return slides
+
+
+BASE_FS = 19      # 1.47: 기본 글꼴 크기(디자인 좌표). 2쪽 표의 "보험사/계약 현황" 글꼴이 기준이다
+NOTE_FS = 18      # 1.47: 주석(※)·보조 설명 — 기본보다 한 단계 작게, 굵게 없이
+NOTE_SRC = 14     # 1.47: 예전에 주석·보조 설명으로 쓰던 크기
+BASE_SRC = (15, 16, 16.5, 17, 18)   # 1.47: 예전에 본문·표·축 글로 쓰던 작은 크기들 → 기본 크기로 올린다
+
+
+def _fs(size, bold=False):
+    """1.47: 글꼴 크기 규칙. (크기, 굵게) 를 돌려준다. 이미 규칙을 거친 값은 다시 넣지 않는다."""
+    if size == NOTE_SRC:
+        return NOTE_FS, False
+    if size in BASE_SRC:
+        return BASE_FS, bold
+    return size, bold
 
 
 class Deck:
@@ -20371,12 +20390,16 @@ class Deck:
         font = CID_FALLBACK if miss else (FONT_B if bold else FONT)
         return font, bold and (miss or FONT_B == FONT)
 
-    def width(self, s, size, bold=False):
+    def width(self, s, size, bold=False, _raw=True):
+        if _raw:
+            size, bold = _fs(size, bold)
         font, _ = self._font(s, bold)
         return pdfmetrics.stringWidth(s, font, size * self.K) / self.K
 
-    def text(self, x, y, s, size, color, bold=False, align="L"):
-        w = self.width(s, size, bold)
+    def text(self, x, y, s, size, color, bold=False, align="L", _raw=True):
+        if _raw:
+            size, bold = _fs(size, bold)
+        w = self.width(s, size, bold, False)
         if self.armed and y > self.limit:
             self.over.append(s)
         x0 = x - w if align == "R" else (x - w / 2 if align == "C" else x)
@@ -20398,10 +20421,13 @@ class Deck:
     def para(self, x, y, w, spans, size, color, lead=1.42):
         """여러 줄 글. spans = [(글, 굵게)]. 단어 단위로 줄을 나눈다. 마지막 줄 아래 y 를 돌려준다."""
         toks = []
+        if size == NOTE_SRC:                                 # 1.47: 주석·보조 설명은 굵게 없이
+            spans = [(t, False) for t, b in spans]
+        size = _fs(size)[0]
         for t, b in spans:
             for p in re.split(r"(\s+)", t):
                 if p:
-                    toks.append((p, b, self.width(p, size, b)))
+                    toks.append((p, b, self.width(p, size, b, False)))
         lines, cur = [[]], 0.0
         for p, b, pw in toks:
             if p.isspace():
@@ -20419,7 +20445,7 @@ class Deck:
             xx = x
             for p, b, pw in ln:
                 if not p.isspace():
-                    self.text(xx, yy, p, size, color, b)
+                    self.text(xx, yy, p, size, color, b, "L", False)
                 xx += pw
             yy += size * lead
         return yy
@@ -20520,7 +20546,8 @@ def _slide_frame(D, s, n, N, name, basis):
     c.restoreState()
     fy, fs = (WIDE_H - 8 * mm) / D.K, 7.5 / D.K
     foot = (f"{name} 고객님 " if name else "") + f"보장분석 요약 · {basis} 기준 · 보험금 지급 근거 아님, 약관·증권 우선"
-    D.text(W_MARGIN_X / D.K, fy, foot, fs, AN_GRAY)
+    if FOOTER_TEXT_SHOW:
+        D.text(W_MARGIN_X / D.K, fy, foot, fs, AN_GRAY)
     D.text((WIDE_W - W_MARGIN_X) / D.K, fy, f"{n} / {N}", fs, AN_GRAY, align="R")
     draw_tall(c)
     D.armed = True
@@ -20532,13 +20559,13 @@ def _draw_slide(D, s, n, N, ctx):
     if k == "summary":
         for i, (lab, val, tc, bc, desc) in enumerate(s["cards"]):
             x = 67 + i * 453
-            D.box(x, 200, 416, 184, fill=AN_CARD, stroke=AN_CARD_LINE, r=10, lw=2)
+            D.box(x, 200, 416, 204, fill=AN_CARD, stroke=AN_CARD_LINE, r=10, lw=2)
             D.box(x + 30, 235, 14, 14, fill=bc, r=7)
             D.text(x + 52, 250, lab, 17, "#374151")
             wv = D.width(str(val), 66, True) + 4 + D.width("개", 30, True)      # 1.34: 카드 숫자는 오른쪽 정렬
             xe = D.text(x + 416 - 30 - wv, 322, str(val), 66, tc, True)
             D.text(xe + 4, 322, "개", 30, tc, True)
-            D.para(x + 30, 356, 360, [(desc, False)], 15, "#374151")
+            D.para(x + 30, 352, 360, [(desc, False)], 14, "#374151")
         D.text(67, 452, "보장 상태", 16, "#1F2937", True)
         vmax = max(20, _nice_max(max(b[1] for b in s["bars"])))
         D.hbars(67, 470, 770, [(a, b_, c_, t_) for a, b_, c_, t_ in s["bars"]], vmax, 2 if vmax <= 20 else 5, "항목 수 (개)", 90, 40, 18)
@@ -20564,7 +20591,7 @@ def _draw_slide(D, s, n, N, ctx):
                 if m_:
                     D.text(1316, yy, m_.group(2), 19, AN_T_NONE if i < 2 else AN_T_LOW, i < 2)
                 D.line(918, yy + 14, 1388, yy + 14, "#E1E5EB", 1.5)
-            D.para(918, 290 + len(s["table"]) * 42 + 52, 470, [(s["note"], False)], 16, AN_GRAY, 1.5)
+            D.para(918, 290 + len(s["table"]) * 42 + 52, 470, [(s["note"], False)], 14, AN_GRAY, 1.5)
         else:
             D.text(932, 235, "구분", 19, AN_INK, True)
             D.text(1250, 235, "준비/필요", 19, AN_INK, True, "R")
@@ -20576,7 +20603,7 @@ def _draw_slide(D, s, n, N, ctx):
                 D.text(1250, yy, b_, 18, AN_INK, False, "R")
                 D.text(1370, yy, r_, 19, AN_C_PREP, True, "R")
                 D.line(918, yy + 18, 1388, yy + 18, "#E1E5EB", 1.5)
-            D.para(918, 290 + len(s["table"]) * 52 + 62, 470, [(s["note"], False)], 16, AN_GRAY, 1.5)
+            D.para(918, 290 + len(s["table"]) * 52 + 62, 470, [(s["note"], False)], 14, AN_GRAY, 1.5)
     elif k == "chemo":
         ch = s["chart"]
         x = D.chip(67, 200, AN_C_NEED, "필요액 (만원)")
@@ -20612,7 +20639,7 @@ def _draw_slide(D, s, n, N, ctx):
                 D.para(x + 30, yy, 360, [(lab + " ", False), (f"{p}만원", True), (f" (필요 {nd})", False)], 17, AN_INK, 1.3)
                 yy += 28
             if cd["more"] > 0:
-                D.text(x + 30, yy, f"외 {cd['more']}개", 15, AN_GRAY)
+                D.text(x + 30, yy, f"외 {cd['more']}개", 14, AN_GRAY)
             D.text(x + 30, 470, cd["foot"], 14, AN_GRAY)
         D.box(67, 512, 1321, 100, fill=AN_BOX, r=10)
         D.para(95, 554, 1260, s["point"], 22, AN_INK, 1.45)
@@ -20653,7 +20680,7 @@ def _draw_slide(D, s, n, N, ctx):
             D.text(1356, yy, f"{min(_rhu(r_), 99)}%", 18, AN_T_NONE if r_ < AN_RED_BELOW else AN_T_LOW, True, "R")
             D.line(950, yy + 12, 1356, yy + 12, "#D5DAE2", 1)
         if not rows_:
-            D.para(950, 326, 410, [("다른 슬라이드에서 다루지 않은 부족 항목은 없어요.", False)], 20, AN_INK)
+            D.para(950, 326, 410, [("다른 슬라이드에서 다루지 않은 부족 항목 없음.", False)], 20, AN_INK)
         D.para(950, 326 + max(len(rows_), 1) * 40 + 14, 410, [(s["note"], False)], 14, AN_GRAY, 1.4)
     elif k in X_KINDS:
         _draw_extra(D, s)
@@ -20667,12 +20694,12 @@ def _draw_slide(D, s, n, N, ctx):
                 D.box(91, y0 + 20, 40, 40, fill=AN_C_NEED, r=8)
                 D.text(111, y0 + 49, str(i + 1), 24, "#FFFFFF", True, "C")
                 D.text(148, y0 + 48, t, 28, AN_INK, True)
-                D.text(148, y0 + 88, dsc, 21, AN_SUB)
+                D.text(148, y0 + 88, dsc, 14, AN_SUB)
             else:
                 D.box(91, y0 + 16, 36, 36, fill=AN_C_NEED, r=8)
                 D.text(109, y0 + 43, str(i + 1), 22, "#FFFFFF", True, "C")
                 D.text(144, y0 + 40, t, 26, AN_INK, True)
-                D.text(144, y0 + 74, dsc, 20, AN_SUB)
+                D.text(144, y0 + 74, dsc, 14, AN_SUB)
         yb = 196 + ns_ * pitch
         D.box(67, yb, 921, 124 if ns_ <= 3 else 104, fill="#EEF2F8", r=10)
         D.para(150, yb + (48 if ns_ <= 3 else 42), 810, s["caution"], 22, AN_INK, 1.45)
@@ -20793,7 +20820,7 @@ def score_slide(entries):
         return None
     n_items = sum(len(a["items"]) for a in d["areas"])
     print(f"[분석] 종합요약 점수 슬라이드: 영역 {len(d['areas'])}개 / 항목 {n_items}개 읽음")
-    concl = d["concl"].replace("합니다.", "해요.").replace(" 해요", "해요")
+    concl = d["concl"]                                   # 1.46: 원본 문장 그대로 쓴다(구어체로 바꾸지 않음)
     areas = [a for a in d["areas"] if _num(a["score"].replace("점", "")) is not None]
     if not areas:
         return None
@@ -20803,15 +20830,15 @@ def score_slide(entries):
     none_n = sum(1 for it in allit if it["status"] == "미보장")
     low = [it for it in allit if it["status"] == "부족" and _num(it["short"]) is not None]
     top = max(low, key=lambda it: _num(it["short"])) if low else None
-    ins1 = [(w1["name"], True), (f"({w1['score']})", True), (" 영역이 가장 낮아요. ", False)]
+    ins1 = [(w1["name"], True), (f"({w1['score']})", True), (" 영역이 가장 낮음. ", False)]
     if w2:
-        ins1 += [(w2["name"], True), (f"({w2['score']})", True), (_josa(w2["score"], "이", "가") + " 그 다음이에요.", False)]
-    ins2 = [(f"종합요약에 나온 {len(allit)}개 항목 중 미보장 {none_n}개는 준비액이 0원이에요. ", False)]
+        ins1 += [(w2["name"], True), (f"({w2['score']})", True), (_josa(w2["score"], "이", "가") + " 그다음.", False)]
+    ins2 = [(f"종합요약에 나온 {len(allit)}개 항목 중 미보장 {none_n}개, 준비액 0원. ", False)]
     q = [d["total"]] + [a["score"] for a in areas]
     if top:
-        ins2 += [("부족액이 가장 큰 항목은 ", False), (top["label"], True), (f"({top['short']}만원)", True), ("이에요.", False)]
+        ins2 += [("부족액이 가장 큰 항목: ", False), (top["label"], True), (f"({top['short']}만원)", True), (".", False)]
         q.append(top["short"])
-    return dict(kind="score", label="종합요약 / 영역별 점수", headline=f"종합점수는 {d['total']}이에요", sub=concl,
+    return dict(kind="score", label="종합요약 / 영역별 점수", headline=f"종합점수 {d['total']}", sub=concl,
                 bars=[(a["name"], _num(a["score"].replace("점", "")), _score_color(_num(a["score"].replace("점", ""))), a["score"]) for a in areas],
                 insight1=ins1, insight2=ins2, quotes=q)
 
@@ -20841,12 +20868,12 @@ def bodymap_slide(entries):
         return None
     have.sort(key=lambda r: -r[1])
     bars = [(lab, v, {"충분": AN_C_OK, "부족": AN_C_LOW}.get(st, AN_C_LOW), amt) for lab, v, amt, st in have]
-    ins1 = [(f"{tot}개 항목 중 ", False), (f"{zero}개", True), (" 항목은 보장이 0원이에요.", False)]
+    ins1 = [(f"{tot}개 항목 중 ", False), (f"{zero}개", True), (" 항목 보장 0원.", False)]
     ins2 = []
     for g, zl in zero_g[:4]:
         ins2 += [(g + ": ", True), (", ".join(zl) + (" / " if (g, zl) != zero_g[:4][-1] else ""), False)]
-    return dict(kind="bodymap", label="신체부위별 보장현황", headline=f"신체부위 {tot}개 항목 중 {zero}개는 보장이 없어요",
-                sub=f"보장이 있는 항목은 {tot - zero}개이고, 금액 단위는 만원이에요.", bars=bars, insight1=ins1, insight2=ins2,
+    return dict(kind="bodymap", label="신체부위별 보장현황", headline=f"신체부위 {tot}개 항목 중 보장 없음 {zero}개",
+                sub=f"보장 있는 항목 {tot - zero}개, 금액 단위 만원", bars=bars, insight1=ins1, insight2=ins2,
                 quotes=[amt for _, _, amt, _ in have])
 
 
@@ -20907,13 +20934,13 @@ def contract_slides(entries, ctx):
     none_c = [c for c in cons if not c["ben"]]
     vmax = max(len(c["ben"]) for c in cons)
     bars = [(_wide_name(c["name"]), len(c["ben"]), (AN_C_NEED if len(c["ben"]) else AN_C_NONE), f"{len(c['ben'])}개") for c in cons]
-    ins1 = [(_short_name(best["name"]), True), (f"({len(best['ben'])}개 항목)", True), ("의 보장이 가장 넓어요.", False)]
-    ins2 = ([(f"분석 항목 보장이 없는 계약은 {len(none_c)}건이에요: ", False), (", ".join(_wide_name(c["name"]) for c in none_c), True)]
-            if none_c else [("모든 계약이 분석 항목을 하나 이상 보장해요.", False)])
+    ins1 = [(_short_name(best["name"]), True), (f"({len(best['ben'])}개 항목)", True), (" 보장이 가장 넓음.", False)]
+    ins2 = ([(f"분석 항목 보장이 없는 계약 {len(none_c)}건: ", False), (", ".join(_wide_name(c["name"]) for c in none_c), True)]
+            if none_c else [("모든 계약이 분석 항목을 하나 이상 보장.", False)])
     chunks = [bars[i:i + X_BARS_PER_PAGE] for i in range(0, len(bars), X_BARS_PER_PAGE)][:X_MAX_PAGES]   # 1.37: 막대 10개씩 1~5쪽
     return [dict(kind="contracts", label="계약별 보장 현황" + (f" ({i + 1}/{len(chunks)})" if len(chunks) > 1 else ""),
-                 headline=f"계약 {len(cons)}건 중 {len(cons) - len(none_c)}건이 분석 항목을 보장해요",
-                 sub=f"{_short_name(best['name'])}의 보장이 {len(best['ben'])}개 항목으로 가장 넓어요.", bars=ch, vmax=vmax,
+                 headline=f"계약 {len(cons)}건 중 {len(cons) - len(none_c)}건이 분석 항목 보장",
+                 sub=f"{_short_name(best['name'])}의 보장 {len(best['ben'])}개 항목으로 가장 넓음", bars=ch, vmax=vmax,
                  insight1=ins1, insight2=ins2, quotes=[]) for i, ch in enumerate(chunks)]
 
 
@@ -20935,10 +20962,10 @@ def age_table_slides(A):
     for j in ([order.index(first)] if first else []) + ([jl - 1] if jl - 1 > 0 else []) + [jl]:
         if j not in pick:
             pick.append(j)
-    cards = [(f"{order[j]}", f"보장 중인 항목 {cnt[j]}개 / 전체 {len(labs)}개", f"직전보다 {dec[j]}개 항목의 금액이 줄어요") for j in pick]
-    head = f"{first}부터 보장금액이 줄기 시작해요" if first else "연령이 들어도 보장금액이 같아요"
+    cards = [(f"{order[j]}", f"보장 중인 항목 {cnt[j]}개 / 전체 {len(labs)}개", f"직전보다 {dec[j]}개 항목 금액 감소") for j in pick]
+    head = f"{first}부터 보장금액 감소 시작" if first else "연령이 높아져도 보장금액 동일"
     return [dict(kind="agetable", label="연령별 보장 항목 수", headline=head,
-                 sub=f"{order[jl]}에는 {len(labs)}개 항목 중 {cnt[jl]}개만 남아요.", cats=order, vals=cnt, vmax=len(labs), cards=cards, quotes=[])]
+                 sub=f"{order[jl]}에는 {len(labs)}개 항목 중 {cnt[jl]}개만 유지", cats=order, vals=cnt, vmax=len(labs), cards=cards, quotes=[])]
 
 
 def other_slides(entries):
@@ -21010,8 +21037,8 @@ def other_slides(entries):
         renew = sum(1 for sp in specs if sp["name"].startswith("[갱신형]"))
         shown_all = items[:X_BARS_PER_PAGE * X_MAX_PAGES]
         shown = shown_all
-        note = (f"분석 보장항목에 연결되지 않은 특약 {unlinked}개는 막대에서 뺐어요. " if unlinked else "") + \
-               (f"외 {len(items) - len(shown_all)}개 항목은 금액이 작아 생략했어요." if len(items) > len(shown_all) else "")
+        note = (f"분석 보장항목에 연결되지 않은 특약 {unlinked}개는 막대에서 제외. " if unlinked else "") + \
+               (f"외 {len(items) - len(shown_all)}개 항목은 금액이 작아 생략." if len(items) > len(shown_all) else "")
         def man(a):
             return f"{a // 10000:,}" if a % 10000 == 0 else f"{a:,}원"
         bars_all = [(lab, a / 10000.0, AN_C_NEED, man(a)) for lab, (a, en) in shown_all]
@@ -21042,13 +21069,13 @@ def proposal_slide(entries):
         return None
     new, chg, out, keep = ch.groups()
     same = int(new) + int(chg) + int(out) == 0
-    head = f"제안 전후 변경 없이 계약 {keep}건을 유지해요" if same else f"신규 {new}건, 변경 {chg}건, 제외 {out}건을 제안해요"
-    sub = (f"가입 건수 {dl.group(1)}건, 월보험료 {dl.group(2)}원 변화예요." if dl else "컨설팅 제안 전과 후를 같은 기준으로 비교했어요.")
+    head = f"제안 전후 변경 없이 계약 {keep}건 유지" if same else f"제안: 신규 {new}건, 변경 {chg}건, 제외 {out}건"
+    sub = (f"가입 건수 {dl.group(1)}건, 월보험료 {dl.group(2)}원 변화" if dl else "컨설팅 제안 전과 후를 같은 기준으로 비교")
     ins = [(f"신규 {new}건 / 변경 {chg}건 / 제외 {out}건 / 유지 {keep}건", True)]
-    ins2 = [(f"제안 전 가입 {heads[0][0]}건, 월보험료 {heads[0][1]}원. 제안 후 가입 {heads[1][0]}건, 월보험료 {heads[1][1]}원이에요.", False)]
+    ins2 = [(f"제안 전 가입 {heads[0][0]}건, 월보험료 {heads[0][1]}원. 제안 후 가입 {heads[1][0]}건, 월보험료 {heads[1][1]}원.", False)]
     return dict(kind="proposal", label="보장 제안 전/후 비교", headline=head, sub=sub, cats=["충분", "부족", "미보장"],
                 before=[int(x) for x in sts[0]], after=[int(x) for x in sts[1]], insight1=ins, insight2=ins2,
-                note=("보험계약 변경사항 표는 비어 있어요." if same else ""),
+                note=("보험계약 변경사항 표 없음." if same else ""),
                 quotes=[heads[0][1] + "원", heads[1][1] + "원"])
 
 
@@ -21100,10 +21127,10 @@ def enroll_slide(entries):
     q = [m["monthly"], m["paid_total"]] + [r[2] for r in rows]
     ex = len(m["excluded"])
     n_done = sum(1 for it in m["items"] if it["done"])
-    sub_short = f"유지 {m['n']}건 중 납입 중 {len(m['items']) - n_done}건, 완납 {n_done}건" + (f", 목록 제외 {ex}건이에요." if ex and ENROLL_SHOW_EXCLUDED else "이에요.")
+    sub_short = f"유지 {m['n']}건 중 납입 중 {len(m['items']) - n_done}건, 완납 {n_done}건" + (f", 목록 제외 {ex}건" if ex and ENROLL_SHOW_EXCLUDED else "")
     base = dict(kind="enroll", label="계약 및 납입 현황", headline=m["title"], sub=sub_short, monthly=m["monthly"],
                 paid_total=m["paid_total"], n=m["n"], card1_sub=m["card1_sub"], card2_sub=m["card2_sub"],
-                comp=comp if bars_ok else [], note=(f"월 보험료 0원, 납입 0회인 계약 {ex}건은 목록에서 뺐어요." if ex and ENROLL_SHOW_EXCLUDED else ""),
+                comp=comp if bars_ok else [], note=(f"월 보험료 0원, 납입 0회인 계약 {ex}건은 목록에서 제외." if ex and ENROLL_SHOW_EXCLUDED else ""),
                 excl=[f"{c_['company']} {c_['name']}" for c_ in m["excluded"]] if ENROLL_SHOW_EXCLUDED else [])
     # 1.37: 줄이 많으면 보험사 묶음을 쪼개지 않고 ENROLL_PER_PAGE 줄씩 나눈다(1~5쪽)
     groups, cur = [], []
@@ -21222,7 +21249,7 @@ def _draw_enroll(D, s):
         D.line(x0, yy + 12, 857, yy + 12, "#BFC5CF" if last_in_group else "#E1E5EB", 1.5 if last_in_group else 1)
     if s.get("note") and s.get("last"):                                  # 1.38: 목록에서 뺀 계약을 마지막 쪽 표 아래에 알림
         y_ = (404 + n * step + 30) if n else 380
-        D.text(x0 + 8, y_, s["note"], 16, AN_GRAY)
+        D.text(x0 + 8, y_, s["note"], 14, AN_GRAY)
         for j_, nm_ in enumerate(s.get("excl", [])[:8]):                # 1.39: 빠진 계약을 한 줄에 하나씩 아래로 나열
             D.text(x0 + 24, y_ + 30 * (j_ + 1), f"{j_ + 1}. {_fit_txt(D, nm_, 16, 760)}", 16, AN_INK)
 
@@ -21261,15 +21288,15 @@ def _draw_extra(D, s):
                 D.text(tx + 10, by + bar_h / 2 + 6, lab, 15, "#111111")
         if k == "other":
             if not rows:
-                D.text(110, 420, "분석 보장항목에 연결된 특약이 없어요.", 22, AN_GRAY)
+                D.text(110, 420, "분석 보장항목에 연결된 특약 없음.", 22, AN_GRAY)
             for i, (t, l1, l2) in enumerate(s["cards"]):
                 y0 = 192 + i * 130
                 D.box(918, y0, 470, 112, fill="#FFFFFF", stroke=AN_CARD_LINE, r=10, lw=2)
                 D.text(942, y0 + 34, t, 16, "#4B5563")
                 D.text(1364, y0 + 68, l1, 24, AN_INK, True, "R")
-                D.text(1364, y0 + 98, l2, 16, AN_GRAY, False, "R")
+                D.text(1364, y0 + 98, l2, 14, AN_GRAY, False, "R")
             if s["note"]:
-                D.para(918, 600, 470, [(s["note"], False)], 15, AN_GRAY, 1.5)
+                D.para(918, 600, 470, [(s["note"], False)], 14, AN_GRAY, 1.5)
         else:
             _insight(D, s, 196, 420 if k != "bodymap" else 440)
             if k == "bodymap":
@@ -21291,7 +21318,7 @@ def _draw_extra(D, s):
         D.vbars(67, 262, 790, 230, s["cats"], [("전", AN_C_NEED, s["before"]), ("후", AN_C_PREP, s["after"])], ymax, "보장 상태")
         _insight(D, s, 196, 330)
         if s["note"]:
-            D.text(918, 640, s["note"], 16, AN_GRAY)
+            D.text(918, 640, s["note"], 14, AN_GRAY)
     elif k == "stablechart":
         ch = s["chart"]
         x = D.chip(67, 200, AN_C_NEED, "필요액 (만원)")
@@ -21307,7 +21334,7 @@ def _draw_extra(D, s):
             D.text(1250, yy, b_, 18, AN_INK, False, "R")
             D.text(1370, yy, r_, 19, AN_C_PREP, True, "R")
             D.line(918, yy + 18, 1388, yy + 18, "#E1E5EB", 1.5)
-        D.para(918, 290 + len(s["table"]) * 52 + 62, 470, [(s["note"], False)], 16, AN_GRAY, 1.5)
+        D.para(918, 290 + len(s["table"]) * 52 + 62, 470, [(s["note"], False)], 14, AN_GRAY, 1.5)
 
 
 def _base_stem(out):
