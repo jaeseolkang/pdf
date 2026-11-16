@@ -1,11 +1,11 @@
-# 2026-11-16 08:10 KST | 수정: 분석 쪽의 색감·분위기를 요약 1~3쪽에 맞춤(흰 바탕·표지 남색/초록 팔레트·흰 카드·같은 꼬리말·tall) (APP_VERSION 1.22) | 이전: 세대 분석을 분석 쪽으로 대체(1.21)
+# 2026-11-16 13:52 KST | 수정: 분석 PDF 맨 앞에 수정 전과 같은 1·2쪽(표지, 보험 가입 현황=계약 및 납입현황)을 그대로 넣고 그 뒤에 분석 쪽을 이어 붙임 (build_pdf only=_front_pages) (APP_VERSION 1.26) | 이전: 선택 옵션 3개 삭제·분석 PDF 우선(1.25)
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
 목표: 원본 보장분석 보고서 PDF 는 글자·표(텍스트) 위주라 발표하기 어렵다. 이것을 가독성이 좋은 16:9 발표용 PDF 로 다시 만든다.
       (쪽별 요약 + 분석 슬라이드. 숫자는 원본 그대로, 결과는 원본과 다시 대조한다.)
 
-교보생명 '보장분석 보고서' PDF를 읽어서, 같은 쪽수·같은 순서의 요약 PDF를 만든다.
+교보생명 '보장분석 보고서' PDF를 읽어서, 요약한 내용을 가지고 분석 PDF 를 만든다(분석 PDF 가 주 결과물, 요약 PDF 는 함께 저장). 요약은 원칙은 1:1로 만들돼 가독성을 위해 원본의 데이터가 많아 한 페이지로 표현 할 수 없으면 최대 다섯장까지 만들어서 순서의 요약 PDF를 만든다.
 아래 목록은 '전체 양식(26쪽)'의 기준 구성이다. 실제 PDF는 이보다 쪽이 줄거나 늘어도 되며,
 쪽 번호가 아니라 쪽 제목을 보고 종류를 판별해 원본 p.N → 요약 p.N 으로 1:1 대응시킨다.
 
@@ -38,12 +38,11 @@
 
 분석 쪽 대체 규칙 (1.20~)
   분석 슬라이드가 다루는 원본 쪽(상품별 분석, 연령별 분석)은 요약 쪽을 만들지 않고 분석 쪽이 대신한다(내용 중복 방지).
-  그래서 요약 쪽 수 = 원본 쪽 수 - 대체한 쪽 수 이고, 분석 쪽은 요약 쪽 맨 뒤에 붙는다. 대체할 종류는 ANALYSIS_REPLACES.
+  요약 쪽을 기준으로 분석 pdf를 만들고 요약쪽 한페이지를 데이터의 양에 따라 최대 5장의 분석 pdf로 만들수 있다. 대체할 종류는 ANALYSIS_REPLACES.
 
 쪽 종류별 처리
   (모든 쪽은 16:9 가로 쪽 — 전용 요약 쪽도 A4 세로가 아니라 16:9. 신체부위별 보장현황은 선을 지운 내장 바탕 그림 위에 연결선·점·구분선을 코드로 직접 그려 원본 모양대로 표시)
-  전용 요약: 표지, 보험 가입 현황, 세대 분석, 상품별 분석, 신체부위별 보장현황, 연령별 분석
-  범용 요약: 그 밖의 모든 쪽(Pride of KYOBO, 종합요약, 보장밸런스, 보장항목별 분석, 보장 제안,
+  전용 요약: 표지, 보험 가입 현황, 세대 분석, 상품별 분석, 신체부위별 보장현황, 연령별 분석등 모든쪽울 전용요약으로 한다.
              전/후 비교 등). 원문 글자는 항목으로, 표는 표로 옮기며, 숫자는 원본 그대로 옮긴다.
   전용 양식으로 읽다가 실패한 쪽도 자동으로 범용 요약으로 처리한다. (실행 시 쪽별 처리 결과를 출력)
 
@@ -80,12 +79,13 @@
       표지와 똑같은 모양·크기로 모든 쪽 오른쪽 끝에 넣는다. (draw_tall, 끄려면 TALL_SHOW_ON_PAGES = False)
   14) [동일 작업] 이 파일을 고칠 때 이미 정해진 양식·이미지 처리 값(보험 가입 현황 양식, 스퀘어 엠블럼, tall, 신체부위별 선)은
       md 「3·3-2·3-3·3-4·5」 의 규칙·고정값과 같게 유지한다. 새로 정한 것은 md 에 규칙으로 먼저 적고, 코드의 상수를 그 값에 맞춘다.
-  16) [분석 쪽] 요약 PDF 의 맨 끝, 원본 쪽 수 뒤에 분석 슬라이드를 이어 붙인다(원본 3~8쪽 숫자 분석, 16:9 최대 9장). 항목을 적정/부족/미보장으로 분류하고
+  16) [분석 PDF] 모든 PDF 는 요약한 내용을 가지고 분석 PDF 로 만든다. 분석 PDF('<원본이름>_분석.pdf')가 제일 우선이다 — 저장 위치·완료 안내·열기 버튼이 모두 분석 PDF 를 가리키고,
+      분석 PDF 를 먼저 만든다. 맨 앞 1·2쪽은 수정 전과 똑같은 요약 쪽(표지, 보험 가입 현황=계약 및 납입현황)이고 그 뒤에 분석 쪽이 이어진다.
+      (분석 쪽: 원본 3~8쪽 숫자 분석, 16:9 최대 9장) 항목을 적정/부족/미보장으로 분류하고
       개수·준비율·순위를 계산해 '한 문장 결론 + 설명 + 카드/표/그림'으로 정리한다. 계산한 값은 고정한 식으로만 만들고(md 3-6), 원본에서 그대로
-      인용한 값은 결과 PDF 에서 다시 대조한다. 앞쪽 '원본 N쪽 = 요약 N쪽' 대응은 그대로이고 분석 쪽은 그 뒤에 붙는다. 쪽 번호는 요약+분석 전체 기준이다.
-      따로 파일로도 받으려면 --separate-analysis. (analysis_slides, build_pdf, draw_analysis_page)
-      분석 쪽이 다루는 원본 쪽(상품별·연령별·세대 분석)의 요약 쪽은 만들지 않고 분석 쪽으로 대체한다(ANALYSIS_REPLACES, replaced_by_analysis). 내용 중복 방지.
-      세대 분석은 구성원이 1명이고 그 값이 상품별 분석의 '준비' 값과 모두 같을 때만 대체한다(_generation_covered). 구성원이 여럿이면 요약 쪽을 남긴다.
+      인용한 값은 결과 PDF 에서 다시 대조한다. (analysis_slides, build_analysis_pdf, draw_analysis_page)
+      요약 PDF('<원본이름>_요약.pdf')는 분석 쪽을 붙이지 않고 원본과 1:1 로 함께 저장한다. 요약 PDF 를 만들지 못해도 분석 PDF 는 그대로 남는다.
+      선택 옵션(범용 요약·분석 쪽 끝에 넣기·분석 PDF 따로 저장)은 없다. 분석할 데이터가 없는 PDF 만 요약 PDF 가 주 결과물이 된다.
   15) [표 쪽 공통 양식] 표로 표현할 수 있는 데이터(세대 분석, 상품별 분석, 연령별 분석, 표가 있는 범용 쪽)는 항상 보험 가입 현황과 같은 형식으로 만든다.
       작은 제목(+고객명·원본 쪽) → 큰 제목 문장 → 한 줄 설명 → 카드 2~3개 → 목록 표(머리줄 아래 굵은 회색 선, 행 사이 옅은 선, 숫자 오른쪽 정렬). (table_page, list_table)
       표 열이 TP_EMBLEM_MAX_COLS 이하면 본문 2/3 + 스퀘어 엠블럼 1/3, 더 넓으면 쪽 전체 폭. 긴 표(세대 분석)는 같은 높이의 좌우 두 표로 나눈다.
@@ -95,20 +95,25 @@
   pip install pdfplumber reportlab
 
 사용
-  1) 창으로 쓰기   : python gaejang_summary_report_v3.py
-                     → [PDF 선택...] 으로 원본을 고르고 [요약 PDF 만들기]를 누른다.
-                       저장 위치를 바꾸지 않으면 원본과 같은 폴더에 '<원본이름>_요약.pdf' 로 저장된다.
+  1) 창으로 쓰기   : python summary_report_v3.py
+                     → [PDF 선택...] 으로 원본을 고르고 [PDF 만들기]를 누른다.
+                       저장 위치를 바꾸지 않으면 원본과 같은 폴더에 '<원본이름>_분석.pdf'(주 결과)와 '<원본이름>_요약.pdf' 가 저장된다.
                        (검은 콘솔 창 없이 쓰려면 파일 이름을 .pyw 로 바꿔 더블클릭)
-  2) 명령줄로 쓰기 : python gaejang_summary_report_v3.py 고순종.pdf
-                     python gaejang_summary_report_v3.py 고순종.pdf 고순종_요약.pdf
-                     python gaejang_summary_report_v3.py 고순종.pdf --generic   (모든 쪽을 범용 요약으로 — 점검용)
-                     python gaejang_summary_report_v3.py 고순종.pdf --no-analysis   (분석 쪽을 넣지 않음)
-                     python gaejang_summary_report_v3.py 고순종.pdf --separate-analysis   (분석 쪽을 별도 PDF 로도 저장)
-     분석 쪽: 요약 PDF 맨 끝에 함께 들어간다. 따로 '<원본이름>_분석.pdf' 도 받으려면 --separate-analysis.
+  2) 명령줄로 쓰기 : python summary_report_v3.py 고순종.pdf
+                     python summary_report_v3.py 고순종.pdf 고순종_분석.pdf
+     선택 옵션은 없다. 항상 분석 PDF 를 만들고, 요약 PDF 는 같은 이름의 '_요약.pdf' 로 함께 저장한다.
 
 한글 글꼴
-  Windows는 '맑은 고딕'(malgun.ttf)을 자동 사용한다. 다른 환경에서는 스크립트와 같은 폴더의
-  fonts/NanumGothic.ttf, fonts/NanumGothicBold.ttf 를 찾고, 없으면 내장 CID 글꼴(HYGothic)로 대체한다.
+  Windows는 '맑은 고딕'(malgun.ttf)을 우선 사용한다. 없으면 스크립트·현재 폴더의 fonts/, 사용자·시스템 글꼴 폴더에서
+  맑은 고딕 / 나눔고딕 / Noto Sans KR / AppleGothic 을 찾는다. 그래도 없으면 나눔고딕을 한 번 내려받아
+  fonts/ 폴더(쓸 수 없으면 사용자 캐시 폴더)에 저장하고, 인터넷도 안 되면 내장 CID 글꼴(HYGothic)로 대체한다.
+
+어느 환경에서든 실행되게 한 부분 (1.23)
+  - 필요한 패키지(pdfplumber, reportlab, Pillow)가 없으면 실행할 때 자동으로 pip 설치를 시도한다.
+  - 콘솔 글자 인코딩이 한글을 못 써도(cp949, ASCII 등) 오류 없이 출력한다.
+  - 스크립트 위치(__file__)가 없는 환경(exe·노트북 등)에서도 현재 폴더 기준으로 동작한다.
+  - 원본이 읽기 전용 폴더에 있으면 결과를 현재 폴더 → 홈 폴더 순서로 대체 저장한다.
+  - 화면(GUI)을 열 수 없는 환경(서버·SSH)에서는 PDF 경로를 직접 입력받거나 사용법을 안내한다.
 """
 import base64
 import contextlib
@@ -122,6 +127,69 @@ import threading
 import traceback
 from pathlib import Path
 from xml.sax.saxutils import escape as _xml_escape
+
+
+# ----------------------------------------------------------------------------
+# 실행 환경 준비 — 폴더·운영체제와 무관하게 돌아가도록 가장 먼저 처리한다
+# ----------------------------------------------------------------------------
+def _fix_console_encoding():
+    """한글을 못 쓰는 콘솔(cp949·ASCII 등)에서도 print 가 죽지 않도록 한다. (창 없는 pythonw 는 stdout 이 None)"""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if stream is not None and hasattr(stream, "reconfigure"):
+                stream.reconfigure(errors="replace")
+        except Exception:
+            pass
+
+
+def _app_dir():
+    """이 프로그램이 있는 폴더. exe 로 묶었거나 __file__ 이 없는 환경이면 현재 폴더."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    try:
+        return Path(__file__).resolve().parent
+    except NameError:
+        return Path.cwd()
+
+
+_REQUIRED = (("pdfplumber", "pdfplumber"), ("reportlab", "reportlab"), ("PIL", "Pillow"))
+
+
+def _ensure_packages():
+    """없는 패키지를 pip 로 설치한다. 일반 → --user → --break-system-packages(외부 관리 환경) 순서로 시도."""
+    import importlib
+    missing = []
+    for mod, pip_name in _REQUIRED:
+        try:
+            importlib.import_module(mod)
+        except ImportError:
+            missing.append(pip_name)
+    if not missing:
+        return
+    if getattr(sys, "frozen", False):
+        sys.exit(f"필요한 패키지가 없습니다: {', '.join(missing)}")
+    print(f"[설치] 필요한 패키지를 설치합니다: {', '.join(missing)}")
+    base = [sys.executable, "-m", "pip", "install", "--quiet", "--disable-pip-version-check"]
+    for extra in ([], ["--user"], ["--user", "--break-system-packages"]):
+        try:
+            if subprocess.call(base + extra + missing) == 0:
+                importlib.invalidate_caches()
+                break
+        except Exception:
+            continue
+    still = []
+    for mod, pip_name in _REQUIRED:
+        try:
+            importlib.import_module(mod)
+        except ImportError:
+            still.append(pip_name)
+    if still:
+        sys.exit("패키지를 자동으로 설치하지 못했습니다. 아래 명령을 직접 실행한 뒤 다시 시도하세요.\n"
+                 f"  {Path(sys.executable).name} -m pip install {' '.join(still)}")
+
+
+_fix_console_encoding()
+_ensure_packages()
 
 import pdfplumber
 
@@ -142,7 +210,7 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.22"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.26"        # 이 파일을 수정할 때마다 올린다
 
 # ----------------------------------------------------------------------------
 # 0. 내장 이미지 — 업로드한 원본 파일 4개를 base64 PNG 로 이 파일 안에 담았다. (별도 이미지 파일 불필요)
@@ -15002,14 +15070,96 @@ GLYPHS = None          # 기본 TTF 글꼴이 가진 글자 코드 집합 (None�
 FALLBACKS = []         # [(글꼴이름, 글자집합)] 기본 글꼴에 없는 글자(한자·로마숫자 등)용 대체 글꼴
 CID_FALLBACK = "HYGothic-Medium"
 
-# (경로, subfontIndex) — 글자를 PDF에 임베드할 수 있는 TrueType 계열만
-FALLBACK_CANDIDATES = [
-    (r"C:\Windows\Fonts\malgun.ttf", 0),
-    (r"C:\Windows\Fonts\batang.ttc", 0),
-    (r"C:\Windows\Fonts\gulim.ttc", 0),
-    ("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", 0),
-    ("/System/Library/Fonts/Supplemental/AppleGothic.ttf", 0),
-]
+def _win_fonts_dir():
+    return os.path.join(os.environ.get("WINDIR") or os.environ.get("SystemRoot") or r"C:\Windows", "Fonts")
+
+
+def _font_dirs(recursive=False):
+    """글꼴을 찾아볼 폴더 목록 (실제로 있는 폴더만). recursive=True 면 하위 폴더까지 찾을 대상."""
+    home = Path.home()
+    app = _app_dir()
+    flat = [app / "fonts", app, Path.cwd() / "fonts", Path.cwd(), _font_cache_dir(),
+            Path(_win_fonts_dir()),
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Windows" / "Fonts" if os.environ.get("LOCALAPPDATA") else None,
+            Path("/System/Library/Fonts/Supplemental"), Path("/System/Library/Fonts"), Path("/Library/Fonts"),
+            home / "Library" / "Fonts"]
+    deep = [home / ".fonts", home / ".local" / "share" / "fonts", Path("/usr/share/fonts"),
+            Path("/usr/local/share/fonts")]
+    out = []
+    for d in (deep if recursive else flat):
+        try:
+            if d is not None and d.is_dir() and d not in out:
+                out.append(d)
+        except OSError:
+            pass
+    return out
+
+
+def _font_cache_dir():
+    """내려받은 글꼴을 보관하는 사용자 캐시 폴더 (프로그램 폴더에 쓸 수 없을 때 사용)."""
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+    return Path(base) / "summary_report" / "fonts"
+
+
+def find_font_file(*names):
+    """이름(대소문자 무시)이 같은 글꼴 파일을 찾아 경로를 돌려준다. 없으면 None."""
+    wanted = {n.lower() for n in names}
+    for d in _font_dirs():
+        try:
+            for f in d.iterdir():
+                if f.name.lower() in wanted and f.is_file():
+                    return str(f)
+        except OSError:
+            continue
+    for d in _font_dirs(recursive=True):
+        try:
+            for f in d.rglob("*"):
+                if f.name.lower() in wanted and f.is_file():
+                    return str(f)
+        except OSError:
+            continue
+    return None
+
+
+def _fallback_candidates():
+    """(경로, subfontIndex) — 기본 글꼴에 없는 글자(한자 등)를 그릴 대체 글꼴. TrueType 윤곽 글꼴만 가능."""
+    found = []
+    for names, idx in ((("malgun.ttf",), 0), (("batang.ttc",), 0), (("gulim.ttc",), 0),
+                       (("wqy-zenhei.ttc",), 0), (("AppleGothic.ttf",), 0)):
+        path = find_font_file(*names)
+        if path:
+            found.append((path, idx))
+    return found
+
+
+FALLBACK_CANDIDATES = []     # register_fonts 에서 채운다 (실행 시점의 폴더 기준)
+
+_NANUM_URL = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/"
+
+
+def _download_nanum():
+    """한글 TTF 가 어디에도 없을 때 나눔고딕을 한 번 내려받는다. 성공하면 (일반, 굵게) 경로, 실패하면 None."""
+    import urllib.request
+    for target in (_app_dir() / "fonts", _font_cache_dir()):
+        try:
+            target.mkdir(parents=True, exist_ok=True)
+            paths = []
+            for remote, local in (("NanumGothic-Regular.ttf", "NanumGothic.ttf"), ("NanumGothic-Bold.ttf", "NanumGothicBold.ttf")):
+                dest = target / local
+                if not dest.exists():
+                    print(f"[글꼴] 한글 글꼴을 찾지 못해 내려받는 중: {remote}")
+                    with urllib.request.urlopen(_NANUM_URL + remote, timeout=30) as r:
+                        data = r.read()
+                    if len(data) < 500_000 or data[:4] not in (b"\x00\x01\x00\x00", b"true"):
+                        raise ValueError("올바른 TTF 가 아닙니다")
+                    tmp = dest.with_suffix(".part")
+                    tmp.write_bytes(data)
+                    tmp.replace(dest)
+                paths.append(str(dest))
+            return paths[0], paths[1]
+        except Exception as ex:
+            print(f"[글꼴] {target} 에 내려받지 못했습니다: {ex}")
+    return None
 
 
 def esc(text):
@@ -15038,36 +15188,61 @@ def register_fonts():
     _register_fonts()
 
 
-def _register_fonts():
-    """한글 글꼴 등록. TTF를 못 찾으면 내장 CID 글꼴로 대체."""
+def _font_candidates():
+    """(일반, 굵게) 글꼴 쌍을 우선순위대로. 파일이 있는 것만."""
+    pairs = []
+    for reg_names, bold_names in (
+            (("malgun.ttf",), ("malgunbd.ttf",)),
+            (("NanumGothic.ttf", "NanumGothic-Regular.ttf", "NanumGothicRegular.ttf"),
+             ("NanumGothicBold.ttf", "NanumGothic-Bold.ttf")),
+            (("NotoSansKR-Regular.ttf", "NotoSansKR-Medium.ttf"), ("NotoSansKR-Bold.ttf",)),
+            (("AppleGothic.ttf",), ("AppleGothic.ttf",))):
+        reg = find_font_file(*reg_names)
+        if reg:
+            pairs.append((reg, find_font_file(*bold_names) or reg))
+    return pairs
+
+
+def _try_register_ttf(reg, bold):
+    """KR / KR-B 로 등록. CFF(.otf) 처럼 reportlab 이 못 읽는 글꼴이면 False."""
     global FONT, FONT_B, GLYPHS
-    here = Path(__file__).resolve().parent
+    try:
+        pdfmetrics.registerFont(TTFont("KR", reg))
+        try:
+            pdfmetrics.registerFont(TTFont("KR-B", bold))
+        except Exception:
+            pdfmetrics.registerFont(TTFont("KR-B", reg))
+        pdfmetrics.registerFontFamily("KR", normal="KR", bold="KR-B", italic="KR", boldItalic="KR-B")
+        FONT, FONT_B = "KR", "KR-B"
+        GLYPHS = set(pdfmetrics.getFont("KR").face.charToGlyph.keys())
+        register_fallbacks(reg)
+        print(f"[글꼴] {reg}")
+        return True
+    except Exception as ex:
+        print(f"[글꼴] {reg} 을(를) 쓸 수 없어 다음 후보로 넘어갑니다: {ex}")
+        return False
+
+
+def _register_fonts():
+    """한글 글꼴 등록. 시스템·폴더에서 찾고, 없으면 나눔고딕을 내려받고, 그래도 없으면 내장 CID 글꼴로 대체."""
+    global FONT, FONT_B
     pdfmetrics.registerFont(UnicodeCIDFont(CID_FALLBACK))
-    candidates = [
-        (r"C:\Windows\Fonts\malgun.ttf", r"C:\Windows\Fonts\malgunbd.ttf"),
-        (str(here / "fonts" / "NanumGothic.ttf"), str(here / "fonts" / "NanumGothicBold.ttf")),
-        (str(here / "NanumGothic.ttf"), str(here / "NanumGothicBold.ttf")),
-        ("/usr/share/fonts/truetype/nanum/NanumGothic.ttf", "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"),
-        ("/System/Library/Fonts/Supplemental/AppleGothic.ttf", "/System/Library/Fonts/Supplemental/AppleGothic.ttf"),
-    ]
-    for reg, bold in candidates:
-        if os.path.exists(reg):
-            pdfmetrics.registerFont(TTFont("KR", reg))
-            pdfmetrics.registerFont(TTFont("KR-B", bold if os.path.exists(bold) else reg))
-            pdfmetrics.registerFontFamily("KR", normal="KR", bold="KR-B", italic="KR", boldItalic="KR-B")
-            FONT, FONT_B = "KR", "KR-B"
-            GLYPHS = set(pdfmetrics.getFont("KR").face.charToGlyph.keys())
-            register_fallbacks(reg)
-            print(f"[글꼴] {reg}")
+    for reg, bold in _font_candidates():
+        if _try_register_ttf(reg, bold):
             return
+    got = _download_nanum()
+    if got and _try_register_ttf(*got):
+        return
     pdfmetrics.registerFontFamily("HYGothic-Medium", normal="HYGothic-Medium", bold="HYGothic-Medium",
                                   italic="HYGothic-Medium", boldItalic="HYGothic-Medium")
     FONT = FONT_B = "HYGothic-Medium"
-    print("[글꼴] TTF를 찾지 못해 내장 CID 글꼴(HYGothic-Medium)을 사용합니다.")
+    print("[글꼴] TTF를 찾지 못해 내장 CID 글꼴(HYGothic-Medium)을 사용합니다. "
+          "(PDF 보기 프로그램에 한글 글꼴이 있어야 글자가 보입니다)")
 
 
 def register_fallbacks(primary_path):
     """기본 글꼴에 없는 글자를 그릴 대체 TTF를 등록한다 (기본 글꼴과 같은 파일은 제외)."""
+    FALLBACK_CANDIDATES[:] = _fallback_candidates()
     for i, (path, idx) in enumerate(FALLBACK_CANDIDATES):
         if os.path.exists(path) and os.path.normcase(path) != os.path.normcase(primary_path):
             try:
@@ -18799,14 +18974,25 @@ def kind_label(c):
     return short or c["name"]
 
 
+# 완납 표시 앞에 붙이는 '보험 종류' 낱말 — (상품명에 들어 있는 말, 표시할 말). 위에서부터 먼저 맞는 것을 쓴다.
+TYPE_KEYWORDS = (("건강", "건강"), ("암보험", "암"), ("어린이", "어린이"), ("운전자", "운전자"), ("실손", "실손"),
+                 ("정기", "정기"), ("저축", "저축"), ("변액", "변액"), ("상해", "상해"), ("치아", "치아"),
+                 ("간병", "간병"), ("치매", "치매"))
+
+
 def type_label(c):
-    """완납 표시 앞에 붙는 말: 종신 / 연금 / (그 밖은 종류에서 '보험' 뺀 말)."""
+    """완납 표시 앞에 붙는 말: 종신 / 연금 / 건강 같은 짧은 종류 낱말. 종류를 알 수 없으면 빈 글자('' → 앞말 없이 표시).
+    (1.24) 예전에는 상품명 전체에서 '보험'만 지워 썼기 때문에 '무배당 삼성화재 건강 누구나건강하게'처럼 길고 이름이 깨진 글이 나왔다."""
     short = short_product(c["name"])
     if "종신" in short:
         return "종신"
     if "연금" in short:
         return "연금"
-    return kind_label(c).replace("보험", "").strip()
+    for needle, label in TYPE_KEYWORDS:
+        if needle in short:
+            return label
+    kind = kind_label(c).replace("보험", "").strip()
+    return kind if 0 < len(kind) <= 6 and " " not in kind else ""
 
 
 def enrollment_model(d):
@@ -18822,7 +19008,7 @@ def enrollment_model(d):
         pc = parse_count(c["count"])
         done = bool(pc) and _int(pc[2]) == 0 and _int(pc[1]) > 0
         if done:
-            status = f"{type_label(c)} {pc[0]}/{pc[1]}회 완납"
+            status = f"{type_label(c)} {pc[0]}/{pc[1]}회 완납".strip()
         elif _int(c["premium"]) > 0:
             status = f"월 {c['premium']}원 납입 중"
         else:
@@ -18830,10 +19016,12 @@ def enrollment_model(d):
         items.append(dict(c=c, kind=kind_label(c), status=status, done=done, rem=pc[2] if pc else ""))
     types = []
     for it in items:
-        if it["done"] and type_label(it["c"]) not in types:
+        if it["done"] and type_label(it["c"]) and type_label(it["c"]) not in types:
             types.append(type_label(it["c"]))
     if types:
         subtitle = f"현재 총 {n}건의 보험 계약을 빈틈없이 유지하고 계시며, 주요 {'·'.join(types)} 계약은 이미 완납되었어요."
+    elif any(it["done"] for it in items):
+        subtitle = f"현재 총 {n}건의 보험 계약을 빈틈없이 유지하고 계시며, 이미 완납된 계약도 있어요."
     elif _int(monthly) > 0:
         subtitle = f"현재 총 {n}건의 보험 계약을 빈틈없이 유지하고 계시며, 월 {monthly}원을 납입 중이에요."
     else:
@@ -19043,18 +19231,28 @@ def story_enrollment(d, src, name):
         return f'<font color="{color}"><b>{esc(text)}</b></font>'
 
     rows = [[Paragraph("보험사", S["en_th"]), Paragraph("계약 현황", S["en_th"]), Paragraph("납입 상태", S["en_th"])]]
+    # (1.24) 계약 한 건 = 표 한 줄. 예전에는 칸마다 <br/> 로 이어 붙여서, 상품명이 두 줄로 접히면 납입 상태가
+    # 다른 계약 옆으로 밀렸다. 보험사 칸은 그 보험사의 줄들을 하나로 합쳐(SPAN) 보여 준다.
+    cmds = [("LINEBELOW", (0, 0), (-1, 0), 1.0, colors.HexColor("#BFC5CF")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5), ("TOPPADDING", (0, 0), (-1, -1), 1.5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5), ("TOPPADDING", (0, 0), (-1, 0), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 6)]
     for g in m["groups"]:
-        rows.append([Paragraph(esc(f"{g['company']} ({len(g['items'])}건)"), S["en_td"]),
-                     Paragraph("<br/>".join(line(it, it["kind"]) for it in g["items"]), S["en_td"]),
-                     Paragraph("<br/>".join(line(it, it["status"], True) for it in g["items"]), S["en_td"])])
+        r0 = len(rows)
+        for k, it in enumerate(g["items"]):
+            rows.append([Paragraph(esc(f"{g['company']} ({len(g['items'])}건)"), S["en_td"]) if k == 0 else "",
+                         Paragraph(line(it, it["kind"]), S["en_td"]),
+                         Paragraph(line(it, it["status"], True), S["en_td"])])
+        r1 = len(rows) - 1
+        if r1 > r0:
+            cmds.append(("SPAN", (0, r0), (0, r1)))
+        cmds += [("TOPPADDING", (0, r0), (-1, r0), 6), ("BOTTOMPADDING", (0, r1), (-1, r1), 6),
+                 ("LINEBELOW", (0, r1), (-1, r1), 0.6, colors.HexColor("#E1E5EB"))]
     if len(rows) == 1:
         rows.append([Paragraph("표시할 계약이 없어요", S["en_td"]), "", ""])
     tb = Table(rows, colWidths=[LW * 0.24, LW * 0.36, LW * 0.40])
-    tb.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, 0), 1.0, colors.HexColor("#BFC5CF")),
-                            ("LINEBELOW", (0, 1), (-1, -1), 0.6, colors.HexColor("#E1E5EB")),
-                            ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                            ("RIGHTPADDING", (0, 0), (-1, -1), 5), ("TOPPADDING", (0, 0), (-1, -1), 6),
-                            ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
+    tb.setStyle(TableStyle(cmds))
     st.append(tb)
     if m["excluded"] and ENROLL_SHOW_EXCLUDED_NOTE:
         st += [Spacer(1, 3 * mm),
@@ -19466,6 +19664,20 @@ def pair_body_words(pg):
     return res, errs
 
 
+def _status_in_text(want, text):
+    """want(공백 없이 비교)가 text 에 있는가. 납입 상태 칸이 두 줄로 접히면 이웃 칸의 글이 줄 사이에 끼어 들어
+    한 덩어리로는 찾지 못하므로, 한 덩어리로 없으면 '앞말'과 '숫자·완납' 조각이 각각 있는지로 대조한다. (1.24)
+    숫자 조각(120/120회완납 등)은 반드시 한 덩어리로 있어야 한다."""
+    flat = re.sub(r"\s+", "", want)
+    if flat in text:
+        return True
+    m = re.search(r"(\d[\d,]*/\d[\d,]*회\s*완납)", want)
+    if not m:
+        return False
+    head = re.sub(r"\s+", "", want[:m.start()])
+    return re.sub(r"\s+", "", m.group(1)) in text and (not head or head in text)
+
+
 def verify_enrollment_values(pdf_path, entries):
     """보험 가입 현황 쪽 검사: ① 쪽에 나와야 할 숫자(건수·월보험료·기납입·납입 상태)가 모두 있는가
     ② 결과 쪽의 모든 큰 숫자(쉼표 포함 또는 3자리 이상)가 원본 쪽에도 있는가 ③ 삭제한 계약이 목록에 남지 않았는가."""
@@ -19478,7 +19690,7 @@ def verify_enrollment_values(pdf_path, entries):
             m = enrollment_model(e["data"])
             text = re.sub(r"\s+", "", _opage(pdf, e).extract_text() or "")
             need = [f"{m['n']}건", f"{m['monthly']}원", f"{m['paid_total']}원"] + [it["status"] for it in m["items"]]
-            miss = [t for t in need if re.sub(r"\s+", "", t) not in text]
+            miss = [t for t in need if not _status_in_text(t, text)]
             src_nums = {x.strip(".,") for x in num.findall(e["page"].extract_text() or "")}
             out_nums = {x.strip(".,") for x in num.findall(_opage(pdf, e).extract_text() or "")}
             extra = sorted(x for x in out_nums - src_nums if ("," in x or len(x) >= 3) and x != "127")
@@ -19513,9 +19725,11 @@ HISTORY_MD = "내장이미지_설명서.md"
 
 def check_history_md():
     """수정 규칙: 현재 버전의 대화·수정 이력이 md 에 있는지 확인하고, 없으면 알린다."""
-    md = Path(__file__).resolve().parent / HISTORY_MD
+    md = _app_dir() / HISTORY_MD
+    if not md.exists():                    # md 가 없는 폴더(배포·다른 컴퓨터)에서는 개발용 안내를 생략한다
+        return
     try:
-        ok = md.exists() and f"v{APP_VERSION}" in md.read_text(encoding="utf-8")
+        ok = f"v{APP_VERSION}" in md.read_text(encoding="utf-8")
     except Exception:
         ok = False
     if not ok:
@@ -19569,12 +19783,19 @@ def draw_analysis_page(canvas, doc):
         _draw_slide(Deck(canvas), doc.ana_slides[j], doc.ana_offset + j + 1, doc.total_pages, doc.ana_ctx)
 
 
-def build_pdf(entries, ctx, out_path, analysis=True):
-    """요약 PDF 를 만든다. analysis=True 이면 분석 슬라이드를 맨 끝에 이어 붙이고 그 쪽 수를 돌려준다."""
+def _prepare(entries, ctx):
+    """요약·분석 PDF 를 만들기 전에 공통으로 필요한 준비(문단 양식, 고객명, 쪽 목록)."""
     global CUSTOMER_NAME
     build_styles()
     CUSTOMER_NAME = ctx.get("name", "")
     ctx["entries"] = entries
+
+
+def build_pdf(entries, ctx, out_path, analysis=True, only=None):
+    """요약 PDF 를 만든다. (1.25~ convert 는 analysis=False 로 부른다 — 분석은 별도 분석 PDF.)
+    analysis=True 이면 분석 슬라이드를 맨 끝에 이어 붙이고 그 쪽 수를 돌려준다.
+    only: 함수(e)->bool. 주어지면 요약 쪽은 그 조건에 맞는 원본 쪽만 만든다(분석 PDF 의 맨 앞 1·2쪽용). 분석에는 모든 원본 쪽 데이터를 쓴다."""
+    _prepare(entries, ctx)
     ana_slides = []
     if analysis:                                      # 분석 쪽을 못 만들어도 요약 쪽은 정상으로 만든다
         try:
@@ -19586,13 +19807,13 @@ def build_pdf(entries, ctx, out_path, analysis=True):
             print(f"[주의] 분석 쪽을 만들지 못했습니다(요약 쪽은 정상): {ex}")
     all_entries = entries                              # 분석에는 모든 원본 쪽 데이터를 쓰고, 요약 쪽은 대체한 쪽을 뺀다
     drop = replaced_by_analysis(all_entries, ana_slides)
-    entries = [e for e in all_entries if e["n"] not in drop]
+    entries = [e for e in all_entries if e["n"] not in drop and (only is None or only(e))]
     for e in all_entries:
         e["out_n"] = None
     for k_, e in enumerate(entries, 1):
         e["out_n"] = k_                                # 결과 PDF 안의 쪽 번호(검사용)
     for e in all_entries:
-        if e["n"] in drop:
+        if e["n"] in drop and only is None:
             print(f"[대체] 원본 p.{e['n']} {e['title']} → 요약 쪽을 만들지 않고 분석 쪽으로 대체")
     cv = ctx["cover"]
     stories = [make_story(e, ctx) for e in entries]
@@ -19603,7 +19824,7 @@ def build_pdf(entries, ctx, out_path, analysis=True):
         if h > fh * 1.5:
             print(f"[주의] 원본 p.{e['n']}: 내용이 많아 약 {int(fh / h * 100)}% 크기로 축소됩니다.")
     name = ctx["name"]
-    doc = BaseDocTemplate(str(out_path), pagesize=(WIDE_W, WIDE_H), title=f"{name} 보장분석 요약 보고서",
+    doc = BaseDocTemplate(str(out_path), pagesize=(WIDE_W, WIDE_H), title=f"{name} 보장분석 " + ("보고서" if only else "요약 보고서"),
                           author=cv.get("fp", ""), leftMargin=MARGIN_X, rightMargin=MARGIN_X)
     doc.total_pages = len(entries) + len(ana_slides)
     doc.ana_slides, doc.ana_offset, doc.ana_ctx = ana_slides, len(entries), ctx
@@ -19665,43 +19886,62 @@ def build_pdf(entries, ctx, out_path, analysis=True):
     return len(ana_slides), len(drop)
 
 
-def convert(src, out, force_generic=False, make_analysis=True, separate_analysis=False):
-    """PDF 한 개를 요약 PDF로 변환한다. 분석 쪽은 요약 PDF 맨 끝에 들어간다. 진행 내용은 print 로 알린다. -> (전체 쪽수, 원본 쪽수, 분석 쪽수, 대체한 원본 쪽수)"""
+def _front_pages(e):
+    """분석 PDF 맨 앞에 수정 전 그대로 넣는 쪽: 원본 1쪽(표지)과 보험 가입 현황(계약 및 납입현황)."""
+    return e["n"] == 1 or e["kind"] == "enrollment"
+
+
+def convert(src, out):
+    """PDF 한 개를 분석 PDF(주 결과)와 요약 PDF 로 변환한다. out = 분석 PDF 경로. 진행 내용은 print 로 알린다.
+    -> dict(main=주 결과 경로, analysis=분석 PDF 경로 또는 None, summary=요약 PDF 경로 또는 None, n_ana, n_sum, n_src)"""
     register_fonts()
-    print(f"[버전] {APP_VERSION}  (출력: 16:9)")
+    print(f"[버전] {APP_VERSION}  (출력: 16:9, 분석 PDF 우선)")
     check_history_md()
-    n_ana = n_drop = 0
+    ap, sp = analysis_path(out), summary_path(out)
+    res = dict(main=None, analysis=None, summary=None, n_ana=0, n_sum=None, n_src=0)
     with pdfplumber.open(str(src)) as pdf:
         n_src = len(pdf.pages)
-        entries, ctx = analyze_pdf(pdf, force_generic)
+        res["n_src"] = n_src
+        entries, ctx = analyze_pdf(pdf)
         print(f"[원본] {n_src}쪽 — 쪽별 처리")
         for e in entries:
             print(f"  p.{e['n']:>2}  {e['title']}  [{e['mode']}]" + (f"  ※ {e['note']}" if e["note"] else ""))
-        n_ana, n_drop = build_pdf(entries, ctx, out, analysis=make_analysis)
-        if make_analysis and separate_analysis:            # 별도 파일은 선택 사항 — 실패해도 요약 PDF 에 영향을 주지 않는다
+        _prepare(entries, ctx)
+        # 1) 분석 PDF — 제일 우선. 만들지 못하면 오류로 멈춘다.
+        # 맨 앞 1·2쪽(표지, 계약 및 납입현황)은 수정 전과 똑같은 요약 쪽, 그 뒤에 분석 쪽
+        n_ana, _ = build_pdf(entries, ctx, ap, analysis=True, only=_front_pages)
+        if n_ana:
+            with pdfplumber.open(str(ap)) as pa:
+                n_all = len(pa.pages)
+            res["analysis"], res["main"], res["n_ana"] = ap, ap, n_ana
+            print(f"[완료] 분석 PDF(우선)  {ap}  (앞 {n_all - n_ana}쪽 + 분석 {n_ana}쪽 = 전체 {n_all}쪽)")
+        else:                                              # 분석할 데이터가 없으면 분석 PDF 는 만들지 않는다
             try:
-                ap = analysis_path(out)
-                if build_analysis_pdf(entries, ctx, ap):
-                    print(f"[완료] 분석 PDF(별도)  {ap}")
-            except Exception as ex:
-                print(f"[주의] 별도 분석 PDF 를 만들지 못했습니다(요약 PDF 는 정상): {ex}")
-    n_out = None
-    try:
-        with pdfplumber.open(str(out)) as po:
-            n_out = len(po.pages)
-        extra = f" + 분석 {n_ana}쪽" if n_ana else ""
-        cut = f", 분석으로 대체한 원본 {n_drop}쪽 제외" if n_drop else ""
-        print(f"[완료] {out}  (요약 {n_out - n_ana}쪽{extra} = 전체 {n_out}쪽 / 원본 {n_src}쪽{cut})")
-        if n_out - n_ana != n_src - n_drop:
-            print("[경고] 요약 쪽수가 원본과 다릅니다. 내용이 한 쪽을 넘쳤는지 확인하세요.")
-    except Exception:
-        print(f"[완료] {out}")
-    return n_out, n_src - n_drop, n_ana, n_drop
+                ap.unlink()
+            except OSError:
+                pass
+            print("[분석] 분석 PDF 를 만들지 못했습니다(분석할 데이터 없음). 요약 PDF 가 주 결과물입니다.")
+        # 2) 요약 PDF — 분석 쪽 없이 원본과 1:1. 실패해도 분석 PDF 는 그대로 둔다.
+        try:
+            build_pdf(entries, ctx, sp, analysis=False)
+            with pdfplumber.open(str(sp)) as po:
+                res["n_sum"] = len(po.pages)
+            res["summary"] = sp
+            if not res["main"]:
+                res["main"] = sp
+            print(f"[완료] 요약 PDF  {sp}  (요약 {res['n_sum']}쪽 / 원본 {n_src}쪽)")
+            if res["n_sum"] != n_src:
+                print("[경고] 요약 쪽수가 원본과 다릅니다. 내용이 한 쪽을 넘쳤는지 확인하세요.")
+        except Exception as ex:
+            if not res["analysis"]:
+                raise                                     # 분석 PDF 도 없으면 결과가 없으므로 오류로 알린다
+            print(f"[주의] 요약 PDF 를 만들지 못했습니다(분석 PDF 는 정상): {ex}")
+    return res
 
 
 # ----------------------------------------------------------------------------
 # 6-B. 분석 PDF — 원본 3~8쪽(세대·상품별·신체부위·연령별)의 숫자를 분석·정리해 16:9 슬라이드 9장으로 만든다.
-#   요약 PDF 맨 끝(원본 쪽 수 뒤)에 이어 붙는다(1.19~). 앞쪽의 '원본 N쪽 = 요약 N쪽' 대응은 그대로다. 별도 파일(<이름>_분석.pdf)은 --separate-analysis.
+#   항상 별도 파일 '<이름>_분석.pdf' 로 만들고 이것이 주 결과물이다(1.25~). 요약 PDF(<이름>_요약.pdf)는 분석 쪽 없이 원본과 1:1 로 함께 저장한다.
 #   기법: ① 항목 36개를 필요·준비·부족으로 읽어 적정/부족/미보장으로 분류 → ② 영역별 개수·준비율·순위를 계산
 #         → ③ 슬라이드마다 '한 문장 결론(큰 제목) + 근거 설명 + 카드/표/그림'으로 정리 → ④ 원본 값은 문자열 그대로 인용하고
 #         계산한 값(비율·합계·순위)은 고정한 식으로만 만든다 → ⑤ 인용한 원본 값이 결과 PDF 에 있는지 다시 대조한다.
@@ -20364,10 +20604,23 @@ def _draw_slide(D, s, n, N, ctx):
         D.c.drawImage(pg, D.X(1010), D.Y(250 + pw * ph0 / pw0 + 60), pw * D.K, pw * ph0 / pw0 * D.K, mask="auto")
 
 
+def _base_stem(out):
+    """결과 파일 이름에서 _분석 / _요약 꼬리를 뗀 이름."""
+    stem = Path(out).stem
+    for tail in ("_분석", "_요약"):
+        if stem.endswith(tail):
+            return stem[:-len(tail)]
+    return stem
+
+
 def analysis_path(out):
-    out = Path(out)
-    stem = out.stem[:-3] if out.stem.endswith("_요약") else out.stem
-    return out.with_name(stem + "_분석.pdf")
+    """분석 PDF(주 결과) 경로: <이름>_분석.pdf"""
+    return Path(out).with_name(_base_stem(out) + "_분석.pdf")
+
+
+def summary_path(out):
+    """요약 PDF(함께 저장) 경로: <이름>_요약.pdf"""
+    return Path(out).with_name(_base_stem(out) + "_요약.pdf")
 
 
 def verify_analysis(path, slides, offset=0):
@@ -20384,7 +20637,7 @@ def verify_analysis(path, slides, offset=0):
             miss = [q for q in s["quotes"] if q not in txt]
             if miss:
                 raise RuntimeError(f"분석 {k_}쪽(전체 {offset + k_}쪽, {s['label']}) 검사 실패: 원본 값 {miss} 가 쪽에 없습니다.")
-    where = f"요약 PDF {offset + 1}~{offset + len(slides)}쪽" if offset else "분석 PDF"
+    where = f"분석 PDF {offset + 1}~{offset + len(slides)}쪽" if offset else "분석 PDF"
     print(f"[검사] {where} 분석 {len(slides)}쪽 16:9·원본 인용 값 {sum(len(s['quotes']) for s in slides)}개 대조 일치")
 
 
@@ -20411,12 +20664,15 @@ def build_analysis_pdf(entries, ctx, out_path):
 def open_path(path):
     """운영체제 기본 프로그램으로 파일/폴더 열기."""
     path = str(path)
-    if sys.platform.startswith("win"):
-        os.startfile(path)                                    # noqa: S606 (Windows 전용)
-    elif sys.platform == "darwin":
-        subprocess.Popen(["open", path])
-    else:
-        subprocess.Popen(["xdg-open", path])
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(path)                                # noqa: S606 (Windows 전용)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+    except Exception as ex:                                   # 열 프로그램이 없는 환경(서버 등)
+        print(f"[안내] 자동으로 열 수 없습니다. 직접 여세요: {path}  ({ex})")
 
 
 class _QueueWriter(io.TextIOBase):
@@ -20441,10 +20697,9 @@ class App:
         self.manual_out = False               # 저장 위치를 직접 골랐는가
         self.last_dir = str(Path.home())
         self.src_var, self.out_var = tk.StringVar(), tk.StringVar()
-        self.gen_var = tk.BooleanVar(value=False)
         self.status_var = tk.StringVar(value="PDF를 선택하세요.")
 
-        root.title(f"보장분석 요약 PDF 만들기 v{APP_VERSION}")
+        root.title(f"보장분석 PDF 만들기 v{APP_VERSION}")
         root.geometry("760x540")
         root.minsize(640, 460)
         frm = ttk.Frame(root, padding=14)
@@ -20452,7 +20707,7 @@ class App:
         frm.columnconfigure(1, weight=1)
         frm.rowconfigure(5, weight=1)
 
-        ttk.Label(frm, text="교보생명 보장분석 보고서 PDF를 골라 쪽별 1:1 요약 PDF를 만듭니다.",
+        ttk.Label(frm, text="교보생명 보장분석 보고서 PDF를 골라, 요약한 내용으로 분석 PDF를 만듭니다.",
                   foreground="#555555").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
 
         ttk.Label(frm, text="원본 PDF").grid(row=1, column=0, sticky="w", padx=(0, 8))
@@ -20465,25 +20720,14 @@ class App:
         self.btn_out = ttk.Button(frm, text="저장 위치...", command=self.pick_out)
         self.btn_out.grid(row=2, column=2, padx=(8, 0), pady=(8, 0))
 
-        opt = ttk.Frame(frm)
-        opt.grid(row=3, column=1, sticky="w", pady=(8, 0))
-        self.chk = ttk.Checkbutton(opt, text="모든 쪽을 범용 요약으로 만들기 (점검용)", variable=self.gen_var)
-        self.chk.pack(side="left")
-        self.ana_var = tk.BooleanVar(value=True)
-        self.chk2 = ttk.Checkbutton(opt, text="분석 쪽을 요약 PDF 끝에 넣기", variable=self.ana_var)
-        self.chk2.pack(side="left", padx=(16, 0))
-        self.sep_var = tk.BooleanVar(value=False)
-        self.chk3 = ttk.Checkbutton(opt, text="분석 PDF 따로도 저장", variable=self.sep_var)
-        self.chk3.pack(side="left", padx=(16, 0))
-
         bar = ttk.Frame(frm)
         bar.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(12, 8))
         bar.columnconfigure(1, weight=1)
-        self.btn_run = ttk.Button(bar, text="요약 PDF 만들기", command=self.start)
+        self.btn_run = ttk.Button(bar, text="PDF 만들기", command=self.start)
         self.btn_run.grid(row=0, column=0)
         self.progress = ttk.Progressbar(bar, mode="indeterminate")
         self.progress.grid(row=0, column=1, sticky="ew", padx=10)
-        self.btn_open = ttk.Button(bar, text="요약 PDF 열기", command=self.open_result, state="disabled")
+        self.btn_open = ttk.Button(bar, text="PDF 열기", command=self.open_result, state="disabled")
         self.btn_open.grid(row=0, column=2)
         self.btn_folder = ttk.Button(bar, text="폴더 열기", command=self.open_folder, state="disabled")
         self.btn_folder.grid(row=0, column=3, padx=(6, 0))
@@ -20519,7 +20763,7 @@ class App:
     def set_busy(self, busy):
         self.running = busy
         state = "disabled" if busy else "normal"
-        for w in (self.btn_pick, self.btn_out, self.btn_run, self.chk, self.chk2, self.chk3):
+        for w in (self.btn_pick, self.btn_out, self.btn_run):
             w.configure(state=state)
         if busy:
             self.progress.start(12)
@@ -20534,8 +20778,8 @@ class App:
         self.src_var.set(path)
         self.last_dir = str(Path(path).parent)
         if not self.manual_out:
-            self.out_var.set(str(Path(path).with_name(Path(path).stem + "_요약.pdf")))
-        self.status_var.set("[요약 PDF 만들기]를 누르세요.")
+            self.out_var.set(str(Path(path).with_name(Path(path).stem + "_분석.pdf")))
+        self.status_var.set("[PDF 만들기]를 누르세요.")
 
     def pick_src(self):
         path = filedialog.askopenfilename(title="원본 보장분석 보고서 PDF 선택", initialdir=self.last_dir,
@@ -20545,9 +20789,9 @@ class App:
 
     def pick_out(self):
         cur = Path(self.out_var.get()) if self.out_var.get() else None
-        path = filedialog.asksaveasfilename(title="요약 PDF 저장 위치", defaultextension=".pdf",
+        path = filedialog.asksaveasfilename(title="분석 PDF 저장 위치", defaultextension=".pdf",
                                             initialdir=str(cur.parent) if cur else self.last_dir,
-                                            initialfile=cur.name if cur else "요약.pdf",
+                                            initialfile=cur.name if cur else "분석.pdf",
                                             filetypes=[("PDF 파일", "*.pdf")])
         if path:
             self.out_var.set(path)
@@ -20589,13 +20833,13 @@ class App:
         self.result = None
         self.status_var.set("변환 중입니다...")
         self.set_busy(True)
-        threading.Thread(target=self._worker, args=(src, out, self.gen_var.get(), self.ana_var.get(), self.sep_var.get()), daemon=True).start()
+        threading.Thread(target=self._worker, args=(src, out), daemon=True).start()
 
-    def _worker(self, src, out, generic, analysis=True, separate=False):
+    def _worker(self, src, out):
         try:
             with contextlib.redirect_stdout(_QueueWriter(self.q)):
-                n_out, n_src, n_ana, n_drop = convert(src, out, generic, analysis, separate)
-            self.q.put(("done", (out, n_out, n_src, n_ana, n_drop)))
+                res = convert(src, out)
+            self.q.put(("done", (res,)))
         except Exception as ex:                                    # 어떤 오류든 창에 보여 준다
             self.q.put(("log", traceback.format_exc()))
             self.q.put(("error", ex))
@@ -20614,22 +20858,26 @@ class App:
             pass
         self.root.after(100, self._poll)
 
-    def _on_done(self, out, n_out, n_src, n_ana=0, n_drop=0):    # n_src = 원본 쪽 수 - 대체한 쪽 수 (요약 쪽 기대 수)
+    def _on_done(self, res):
         self.set_busy(False)
         self.finished = True
-        self.result = Path(out)
+        main = res.get("main")
+        self.result = Path(main) if main else None            # 열기·폴더 열기는 분석 PDF(우선)를 가리킨다
         for w in (self.btn_open, self.btn_folder):
             w.configure(state="normal")
-        n_sum = None if n_out is None else n_out - n_ana           # 분석 쪽을 뺀 요약 쪽수
-        same = (n_sum is None) or (n_sum == n_src)
-        extra = f" + 분석 {n_ana}쪽" if n_ana else ""
-        cut = f" (분석으로 대체한 {n_drop}쪽 제외)" if n_drop else ""
-        self.status_var.set(f"완료: 원본 {n_src + n_drop}쪽 → 요약 {n_sum if n_sum is not None else '?'}쪽{extra}{cut}  |  {out}")
-        if same:
-            if messagebox.askyesno("완료", f"요약 PDF를 만들었습니다. (요약 {n_src}쪽{extra}{cut})\n{out}\n\n지금 열어 볼까요?"):
-                self.open_result()
-        else:
+        n_src, n_sum, n_ana = res["n_src"], res["n_sum"], res["n_ana"]
+        parts = []
+        if res.get("analysis"):
+            parts.append(f"분석 {n_ana}쪽")
+        if res.get("summary"):
+            parts.append(f"요약 {n_sum}쪽")
+        what = " + ".join(parts) if parts else "결과 없음"
+        files = "\n".join(str(p) for p in (res.get("analysis"), res.get("summary")) if p)
+        self.status_var.set(f"완료: 원본 {n_src}쪽 → {what}  |  {main}")
+        if res.get("summary") and n_sum != n_src:
             messagebox.showwarning("쪽수 확인", f"요약 {n_src}쪽이 되어야 하는데 {n_sum}쪽입니다.\n로그를 확인하세요.")
+        elif messagebox.askyesno("완료", f"PDF를 만들었습니다. ({what})\n{files}\n\n분석 PDF를 지금 열어 볼까요?"):
+            self.open_result()
 
     def _on_error(self, ex):
         self.set_busy(False)
@@ -20661,21 +20909,67 @@ def run_gui():
     root.mainloop()
 
 
+def _clean_path(text):
+    """따옴표·앞뒤 공백을 지우고 ~ 와 환경변수를 풀어 Path 로 돌려준다."""
+    return Path(os.path.expandvars(os.path.expanduser(str(text).strip().strip('"').strip("'"))))
+
+
+def _writable_output(out, src):
+    """결과를 저장할 수 있는 경로를 돌려준다. 원본 폴더에 쓸 수 없으면 현재 폴더 → 홈 폴더로 대체."""
+    out = Path(out)
+    for folder in (out.parent, Path.cwd(), Path.home()):
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            probe = folder / ".summary_report_write_test"
+            probe.write_bytes(b"")
+            probe.unlink()
+        except OSError:
+            continue
+        final = out if folder == out.parent else folder / out.name
+        if final != out:
+            print(f"[안내] {out.parent} 에 저장할 수 없어 {folder} 에 저장합니다.")
+        return final
+    return out
+
+
+def _usage_and_exit(reason):
+    print(reason)
+    print("\n사용법: python summary_report_v3.py <원본.pdf> [결과_분석.pdf]")
+    sys.exit(1)
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    force_generic = "--generic" in sys.argv
-    make_analysis = "--no-analysis" not in sys.argv
-    separate_analysis = "--separate-analysis" in sys.argv
+    old_opts = [a for a in sys.argv[1:] if a.startswith("--")]
+    if old_opts:                                      # 1.25: 선택 옵션이 없어졌다
+        print(f"[안내] 선택 옵션({' '.join(old_opts)})은 없어졌습니다. 항상 분석 PDF 를 만듭니다.")
     if not args:                                      # 인자가 없으면 PDF 선택 창을 연다
-        if tk is None:
-            print("tkinter를 사용할 수 없어 창을 열 수 없습니다. 명령줄로 PDF 경로를 지정하세요.\n")
-            print(__doc__)
-            sys.exit(1)
-        run_gui()
-        return
-    src = Path(args[0])
-    out = Path(args[1]) if len(args) > 1 else src.with_name(src.stem + "_요약.pdf")
-    convert(src, out, force_generic, make_analysis, separate_analysis)
+        if tk is not None:
+            try:
+                run_gui()
+                return
+            except tk.TclError as ex:                 # 화면이 없는 환경(서버·SSH 등)
+                print(f"[안내] 창을 열 수 없습니다({ex}).")
+        if sys.stdin is not None and sys.stdin.isatty():
+            typed = input("원본 PDF 경로를 입력하세요 (끌어다 놓아도 됩니다): ").strip()
+            if not typed:
+                _usage_and_exit("경로가 입력되지 않았습니다.")
+            args = [typed]
+        else:
+            _usage_and_exit("PDF 경로가 필요합니다.")
+    src = _clean_path(args[0])
+    if not src.is_file():
+        _usage_and_exit(f"원본 PDF를 찾을 수 없습니다: {src}")
+    out = _clean_path(args[1]) if len(args) > 1 else src.with_name(src.stem + "_분석.pdf")
+    if out.suffix.lower() != ".pdf":
+        out = out.with_suffix(".pdf")
+    if out.resolve() == src.resolve():
+        _usage_and_exit("원본 PDF와 같은 파일에는 저장할 수 없습니다. 결과 파일 이름을 다르게 지정하세요.")
+    out = _writable_output(out, src)
+    try:
+        convert(src, out)
+    except PermissionError as ex:
+        sys.exit(f"저장하지 못했습니다. 결과 PDF 가 다른 프로그램에서 열려 있으면 닫고 다시 시도하세요.\n{ex}")
 
 
 if __name__ == "__main__":
