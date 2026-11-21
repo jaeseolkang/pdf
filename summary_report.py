@@ -1,4 +1,4 @@
-# 2026-11-21 KST | 수정: 상품별 가입 현황 막대 그래프도 항목별 연한 색(PC_BAR_COLORS), 막대 안 글자는 진한 색 (APP_VERSION 1.77) | 이전: 급부가 쪽 끝에 걸리지 않게 통째로 넘김
+# 2026-11-21 KST | 수정: 가입상품 보장내역 쪽 글자를 두 단계 더 키움(PC_FONT_STEP 4→6, APP_VERSION 1.92) | 이전: 실제 Bold 글꼴 확인 안내 줄
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -102,8 +102,12 @@
      선택 옵션은 없다. 분석 PDF 만 만든다(1.63~, 요약 PDF 는 만들지 않음).
 
 한글 글꼴
-  1.48: 굴림체(Windows 의 gulim.ttc 안 GulimChe)를 가장 먼저 쓴다. 굴림체에는 굵은 글꼴이 없어 굵게는 테두리로 만든다.
-  굴림체가 없으면 아래 순서로 대체한다.
+  1.89: 굴림체와 같은 고정폭 고딕이면서 굵은 글꼴(Bold)이 따로 있는 '나눔고딕코딩'(Regular·Bold, OFL 무료)을 가장 먼저 쓴다.
+        PC 에 없으면 웹(GitHub google/fonts)에서 한 번 내려받아 fonts/ 폴더(안 되면 사용자 캐시 폴더)에 저장한다.
+        그것도 안 되면 D2Coding(GitHub naver/d2codingfont, 같은 고정폭 한글 글꼴)을 내려받아 쓴다.
+        굴림체를 쓰려면 코드의 FONT_CHOICE 를 "gulim" 으로 바꾼다.
+  1.48: 굴림체(Windows 의 gulim.ttc 안 GulimChe). 굴림체에는 굵은 글꼴이 없어 굵게는 테두리로 만든다.
+  위 글꼴이 모두 없으면 아래 순서로 대체한다.
   Windows는 '맑은 고딕'(malgun.ttf)을 우선 사용한다. 없으면 스크립트·현재 폴더의 fonts/, 사용자·시스템 글꼴 폴더에서
   맑은 고딕 / 나눔고딕 / Noto Sans KR / AppleGothic 을 찾는다. 그래도 없으면 나눔고딕을 한 번 내려받아
   fonts/ 폴더(쓸 수 없으면 사용자 캐시 폴더)에 저장하고, 인터넷도 안 되면 내장 CID 글꼴(HYGothic)로 대체한다.
@@ -210,7 +214,7 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.82"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.92"        # 이 파일을 수정할 때마다 올린다
 MAKE_REPORT_PDF = True            # 1.64: 분석 결과 500자 요약 리포트(<이름>_요약리포트.pdf)를 함께 만든다
 REPORT_CHARS = 500                # 요약 리포트 글자 수(공백 포함)
 MAKE_SUMMARY_PDF = False         # 1.63: 요약 PDF(<이름>_요약.pdf)를 만들지 않는다. True 로 바꾸면 예전처럼 함께 저장(분석 PDF 를 못 만든 경우는 요약 PDF 를 대신 만든다)
@@ -15141,6 +15145,75 @@ FALLBACK_CANDIDATES = []     # register_fonts 에서 채운다 (실행 시점의
 
 _NANUM_URL = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/"
 
+FONT_CHOICE = "coding"        # 1.89: "coding" = 나눔고딕코딩(없으면 D2Coding) 우선, "gulim" = 굴림체 우선(굵게는 테두리로)
+_CODING_URL = "https://github.com/google/fonts/raw/main/ofl/nanumgothiccoding/"
+_CODING_FILES = ("NanumGothicCoding-Regular.ttf", "NanumGothicCoding-Bold.ttf")
+_D2_ZIP_URL = "https://github.com/naver/d2codingfont/releases/download/VER1.3.2/D2Coding-Ver1.3.2-20180524.zip"
+
+
+def _is_ttf(data, min_size=300_000):
+    return len(data) >= min_size and data[:4] in (b"\x00\x01\x00\x00", b"true")
+
+
+def _urlread(url, timeout=60):
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def _download_coding():
+    """1.89: 굵은 글꼴이 있는 고정폭 한글 글꼴을 웹에서 내려받는다. 나눔고딕코딩(Regular·Bold) → 안 되면 D2Coding(zip).
+    성공하면 (일반 경로, 굵게 경로), 실패하면 None. 받은 파일은 fonts/ 폴더(안 되면 사용자 캐시 폴더)에 저장한다."""
+    import io as _io
+    import zipfile
+    for target in (_app_dir() / "fonts", _font_cache_dir()):
+        try:
+            target.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            continue
+        reg_p, bold_p = target / _CODING_FILES[0], target / _CODING_FILES[1]
+        if reg_p.exists() and bold_p.exists():
+            return str(reg_p), str(bold_p)
+        try:
+            blobs = []
+            for name in _CODING_FILES:
+                print(f"[글꼴] 나눔고딕코딩을 내려받는 중: {name}")
+                data = _urlread(_CODING_URL + name)
+                if not _is_ttf(data):
+                    raise ValueError("올바른 TTF 가 아닙니다")
+                blobs.append(data)
+            for p, data in zip((reg_p, bold_p), blobs):
+                tmp = p.with_suffix(".part")
+                tmp.write_bytes(data)
+                tmp.replace(p)
+            return str(reg_p), str(bold_p)
+        except Exception as ex:
+            print(f"[글꼴] 나눔고딕코딩을 {target} 에 내려받지 못했습니다: {ex}")
+        d2r, d2b = target / "D2Coding.ttf", target / "D2CodingBold.ttf"
+        if d2r.exists() and d2b.exists():
+            return str(d2r), str(d2b)
+        try:
+            print("[글꼴] D2Coding 을 내려받는 중")
+            with zipfile.ZipFile(_io.BytesIO(_urlread(_D2_ZIP_URL, 120))) as z:
+                found = {}
+                for info in z.infolist():
+                    base = info.filename.replace("\\", "/").split("/")[-1]
+                    low = base.lower()
+                    if not low.endswith(".ttf") or "d2coding" not in low or "ligature" in info.filename.lower() or "all" in low:
+                        continue
+                    found["bold" if "bold" in low else "reg"] = z.read(info)
+                if "reg" not in found or "bold" not in found or not (_is_ttf(found["reg"]) and _is_ttf(found["bold"])):
+                    raise ValueError("zip 안에서 D2Coding Regular·Bold TTF 를 찾지 못했습니다")
+            for p, key in ((d2r, "reg"), (d2b, "bold")):
+                tmp = p.with_suffix(".part")
+                tmp.write_bytes(found[key])
+                tmp.replace(p)
+            return str(d2r), str(d2b)
+        except Exception as ex:
+            print(f"[글꼴] D2Coding 을 {target} 에 내려받지 못했습니다: {ex}")
+    return None
+
 
 def _download_nanum():
     """한글 TTF 가 어디에도 없을 때 나눔고딕을 한 번 내려받는다. 성공하면 (일반, 굵게) 경로, 실패하면 None."""
@@ -15199,6 +15272,13 @@ GULIMCHE_INDEX = 1
 def _font_candidates():
     """(일반, 굵게) 글꼴 쌍을 우선순위대로. 파일이 있는 것만."""
     pairs = []
+    if FONT_CHOICE == "coding":                           # 1.89: 굵은 글꼴이 따로 있는 고정폭 한글 글꼴을 굴림체보다 먼저
+        for reg_names, bold_names in ((("NanumGothicCoding-Regular.ttf", "NanumGothicCoding.ttf"), ("NanumGothicCoding-Bold.ttf", "NanumGothicCodingBold.ttf")),
+                                      (("D2Coding.ttf",), ("D2CodingBold.ttf",))):
+            reg = find_font_file(*reg_names)
+            bold = find_font_file(*bold_names)
+            if reg and bold:
+                pairs.append((reg, bold, 0))
     gul = find_font_file("gulim.ttc")                    # 1.48: 굴림체 = gulim.ttc 의 두 번째 글꼴(0 굴림, 1 굴림체, 2 돋움, 3 돋움체)
     if gul:
         pairs.append((gul, gul, GULIMCHE_INDEX))
@@ -15232,6 +15312,8 @@ def _try_register_ttf(reg, bold, idx=0):
         GLYPHS = set(pdfmetrics.getFont("KR").face.charToGlyph.keys())
         register_fallbacks(reg)
         print(f"[글꼴] {reg}")
+        print("[글꼴] 굵은 글꼴: " + ("테두리로 만든 굵게(굵은 글꼴 파일 없음 — 일부 PDF 보기에서 덜 굵어 보일 수 있음)" if BOLD_FAKE
+                                  else f"실제 Bold 파일({os.path.basename(bold)}) — PDF 에 포함되어 태블릿·폰 어느 PDF 보기에서도 같은 굵기로 보임"))
         return True
     except Exception as ex:
         print(f"[글꼴] {reg} 을(를) 쓸 수 없어 다음 후보로 넘어갑니다: {ex}")
@@ -15242,6 +15324,10 @@ def _register_fonts():
     """한글 글꼴 등록. 시스템·폴더에서 찾고, 없으면 나눔고딕을 내려받고, 그래도 없으면 내장 CID 글꼴로 대체."""
     global FONT, FONT_B
     pdfmetrics.registerFont(UnicodeCIDFont(CID_FALLBACK))
+    if FONT_CHOICE == "coding" and not any(os.path.basename(c[0]).lower().startswith(("nanumgothiccoding", "d2coding")) for c in _font_candidates()):
+        got_c = _download_coding()                        # 1.89: PC 에 없으면 웹에서 내려받는다
+        if got_c and _try_register_ttf(got_c[0], got_c[1]):
+            return
     for reg, bold, idx in _font_candidates():
         if _try_register_ttf(reg, bold, idx):
             return
@@ -20695,7 +20781,7 @@ class Deck:
         if xlabel:
             self.text(fx + fw / 2, y + h + 64, xlabel, 16, "#374151", align="C")
 
-    def hbars(self, x, y, w, rows, vmax, step, axis_title, label_w=110, bar_h=34, gap=14, show_val=True):
+    def hbars(self, x, y, w, rows, vmax, step, axis_title, label_w=110, bar_h=34, gap=14, show_val=True, up=0):
         """가로 막대. rows = [(이름, 값, 색, 값글자색)]. 점선 틀 + 눈금."""
         n = len(rows)
         ph = n * bar_h + (n - 1) * gap + 40
@@ -20706,17 +20792,17 @@ class Deck:
             gx = px0 + 10 + (pw - 20) * (k * step) / vmax
             if k:
                 self.line(gx, y, gx, y + ph, "#E5E8ED", 1, (4, 4))
-            self.text(gx, y + ph + 26, _fmt_k(k * step) if vmax >= 1000 else f"{int(k * step)}", 15, "#374151", align="C")
+            self.text(gx, y + ph + 26 + up, _fmt_k(k * step) if vmax >= 1000 else f"{int(k * step)}", (BASE_FS + up - 2) if up else 15, "#374151", align="C")
             k += 1
         for i, r_ in enumerate(rows):
             nm, v, col = r_[0], r_[1], r_[2]
             by = y + 20 + i * (bar_h + gap)
             bw = max(8.0, (pw - 20) * v / vmax)
             self.box(px0 + 10, by, bw, bar_h, fill=col, r=8)
-            self.text(px0 - 12, by + bar_h / 2 + 6, nm, 17, "#1F2937", align="R")
+            self.text(px0 - 12, by + bar_h / 2 + 6 + up / 2, nm, (BASE_FS + up) if up else 17, "#1F2937", align="R")
             if show_val:
                 self.text(px0 + 10 + bw - 12, by + bar_h / 2 + 6, f"{int(v)}", 15, r_[3] if len(r_) > 3 else "#111111", align="R")
-        self.text(px0 + pw / 2, y + ph + 58, axis_title, 16, "#374151", align="C")
+        self.text(px0 + pw / 2, y + ph + 58 + up * 1.5, axis_title, (BASE_FS + up - 2) if up else 16, "#374151", align="C")
         return y + ph + 64
 
 
@@ -20727,8 +20813,8 @@ AN_HEAD_SUB = "#E6EEFB"                       # 헤더 안 작은 글자
 AN_HEAD_PT = 36                               # 헤더 결론 제목 글자 크기 (넘치면 최소 26까지 줄임)
 
 
-def D_fit_head(D, txt, maxw):
-    sz = float(AN_HEAD_PT)
+def D_fit_head(D, txt, maxw, up=0):
+    sz = float(AN_HEAD_PT + min(up, 2))                     # 제목은 헤더 박스 높이 때문에 최대 +2
     while sz > 26 and D.width(txt, sz, True) > maxw:
         sz -= 0.5
     return sz
@@ -20742,13 +20828,16 @@ def _slide_frame(D, s, n, N, name, basis):
     # 1.32: 헤더 = 모든 분석 쪽 같은 위치·크기(AN_HEAD_BOX)의 파랑 박스 + 흰 글자. 작은 제목(왼쪽 위)·고객 표시(오른쪽 위)·결론 제목.
     hx, hy, hw, hh = AN_HEAD_BOX
     D.box(hx, hy, hw, hh, fill=AN_HEAD_FILL, r=12)
-    D.text(hx + 28, hy + 30, s["label"], 15, AN_HEAD_SUB, True)
-    D.text(hx + hw - 28, hy + 30, (f"{name} 고객님 / 분석" if name else "분석"), 15, AN_HEAD_SUB, False, "R")
+    up = s.get("fs_up", 0)                                          # 1.88: 가입상품 보장내역 쪽만 머리글 글자를 키운다
+    lab_sz = (BASE_FS + up) if up else 15
+    D.text(hx + 28, hy + 30, s["label"], lab_sz, AN_HEAD_SUB, True)
+    D.text(hx + hw - 28, hy + 30, (f"{name} 고객님 / 분석" if name else "분석"), lab_sz, AN_HEAD_SUB, False, "R")
+    hsz = D_fit_head(D, s["headline"], hw - 56, up)
     if s.get("head_center"):                                        # 1.81: 짧은 제목은 헤더 박스 가운데에 놓는다
-        D.text(hx + hw / 2, hy + 74, s["headline"], D_fit_head(D, s["headline"], hw - 56), AN_HEAD_TEXT, True, "C")
+        D.text(hx + hw / 2, hy + 74, s["headline"], hsz, AN_HEAD_TEXT, True, "C")
     else:
-        D.text(hx + 28, hy + 74, s["headline"], D_fit_head(D, s["headline"], hw - 56), AN_HEAD_TEXT, True)
-    D.text(67, 172, s["sub"], 23, AN_SUB)
+        D.text(hx + 28, hy + 74, s["headline"], hsz, AN_HEAD_TEXT, True)
+    D.text(67, 172, s["sub"], 23 + up, AN_SUB)
     c.saveState()                                                   # 꼬리말: 요약 쪽(draw_footer)과 같은 선·글자 크기·위치
     c.setStrokeColor(colors.HexColor("#D1D5DB"))
     c.line(W_MARGIN_X, 12 * mm, WIDE_W - W_MARGIN_X, 12 * mm)
@@ -21501,7 +21590,9 @@ def parse_prodcov_page(pg):
 
 
 PC_X = dict(spec=67, spec_w=118, name=190, name_w=192, cond=390, cond_w=605, amt=1000, amt_w=378)   # 가입상품 보장내역 표의 칸(디자인 좌표)
-PC_SIZE, PC_LEAD, PC_PAD = 15.5, 22, 7
+PC_FONT_STEP = 6                  # 1.88: 가입상품 보장내역 쪽 글자 단계(0 = 처음 크기). 한 단계마다 본문 +2pt, 줄 간격 +3. 1.90: 1.92: 기준 단계 = 6
+PC_UP = 2 * (PC_FONT_STEP - 1)    # 1.88: 머리글·"상품별 가입 현황" 쪽 등 다른 글자에 더하는 크기 (3단계 → +4)
+PC_SIZE, PC_LEAD, PC_PAD = 15.5 + 2 * PC_FONT_STEP, 22 + 3 * PC_FONT_STEP, 7      # 4단계: 본문 23.5, 줄 간격 34
 PC_Y_MAX = 742
 PC_GRAPH = True      # 1.76: True = 가입상품 보장내역을 글자를 줄인 막대그래프 쪽으로, False = 전체 글을 옮긴 표 쪽(1.73~1.75)
 _PCM = Deck(None)
@@ -21641,7 +21732,7 @@ def prodcov_detail_slides(entries, noamt=False):
             lab = "금액 없는 항목 요약" if noamt else "가입상품 보장내역"
             head = (f"금액이 없는 항목 요약 ({len(rows)}건)" if pi == 0 else "금액이 없는 항목 요약 (계속)") if noamt else \
                    (f"{short} 보장내역 전체 요약" if pi == 0 else f"{short} 보장내역 (계속)")
-            slides.append(dict(kind="pcnoamt" if noamt else "pcdetail", noamt=noamt, label=f"{short} / {lab}" + (f" ({pi + 1}/{len(pages)})" if len(pages) > 1 else ""),
+            slides.append(dict(kind="pcnoamt" if noamt else "pcdetail", noamt=noamt, fs_up=PC_UP, label=f"{short} / {lab}" + (f" ({pi + 1}/{len(pages)})" if len(pages) > 1 else ""),
                                headline=head, sub=(f"{who}님 / " if who else "") + f"발급 {p['issued']}" + (f" / 발급자 {p['by']}" if p["by"] else ""),
                                rows=pr, specs=spec_rows if pi == 0 else [], total=tot, first=(pi == 0), quotes=quotes))
     return slides
@@ -21655,23 +21746,23 @@ def _draw_pcdetail(D, s):
         cols = [(x0, "특약명", "L"), (x0 + 330, "가입금액(원)", "R"), (x0 + 490, "보기", "R"), (x0 + 640, "납기", "R"), (x1 - 14, "보험료(원)", "R")]
         D.box(x0, y, x1 - x0, 34, fill=BF_HEAD, r=6)
         for cx, t, al in cols:
-            D.text(cx + (12 if al == "L" else 0), y + 24, t, 15.5, "#FFFFFF", True, al)
+            D.text(cx + (12 if al == "L" else 0), y + 24, t, PC_SIZE, "#FFFFFF", True, al)
         y += 34
         for i, sp in enumerate(s["specs"]):
             D.box(x0, y, x1 - x0, 34, fill="#F3F5F9" if i % 2 == 0 else "#FFFFFF")
             vals = [sp[0], sp[1], sp[2], sp[3], sp[4]]
             for (cx, _t, al), v in zip(cols, vals):
-                D.text(cx + (12 if al == "L" else 0), y + 24, v, 15.5, ink, True, al)
+                D.text(cx + (12 if al == "L" else 0), y + 24, v, PC_SIZE, ink, True, al)
             y += 34
         D.line(x0, y + 1, x1, y + 1, "#1F3F7A", 2)
-        D.text(x0 + 12, y + 26, "월 보험료 합계", 15.5, ink, True)
-        D.text(x1 - 14, y + 26, f"{s['total']:,}", 17.5, "#A80F0F", True, "R")
+        D.text(x0 + 12, y + 26, "월 보험료 합계", PC_SIZE, ink, True)
+        D.text(x1 - 14, y + 26, f"{s['total']:,}", PC_SIZE + 2, "#A80F0F", True, "R")
         y += 46
     D.box(x0, y, x1 - x0, 34, fill=BF_HEAD, r=6)
     for cx, t in ((PC_X["spec"] + 12, "특약명"), (PC_X["name"] + 6, "급부명"), (PC_X["cond"] + 6, "보장내역")):
-        D.text(cx, y + 24, t, 15.5, "#FFFFFF", True)
+        D.text(cx, y + 24, t, PC_SIZE, "#FFFFFF", True)
     if not s.get("noamt"):
-        D.text(PC_X["amt"] + PC_X["amt_w"] - 14, y + 24, "보장금액", 15.5, "#FFFFFF", True, "R")
+        D.text(PC_X["amt"] + PC_X["amt_w"] - 14, y + 24, "보장금액", PC_SIZE, "#FFFFFF", True, "R")
     y += 34
     for r in s["rows"]:
         h = r["h"]
@@ -21765,13 +21856,17 @@ def _pc_graph_groups(p):
     """상품 하나의 급부별 막대 목록 → [dict(name, spec, bars[(이름, 값(원), 글, 원본숫자들)])] (금액 있는 급부만)"""
     out = []
     for gr in p["groups"]:
-        bars, prev = [], []
+        bars, prev, hdr_ctx, last_amt = [], [], [], False
         for kind, c_, a_ in gr["items"]:
             if kind != "행":
                 continue
             if not a_:
+                if last_amt:                                  # 금액 없는 줄이 새로 시작되면 새 머리 설명 묶음
+                    hdr_ctx, last_amt = [], False
                 prev.append(c_)
+                hdr_ctx.append(c_)
                 continue
+            last_amt = True
             lines, buf = [], ""
             for ln in _pc_amt_lines(a_):
                 buf = (buf + " " + ln).strip()
@@ -21797,24 +21892,32 @@ def _pc_graph_groups(p):
                 else:
                     lab = _pc_label(prev, c_, ln)
                 lab = re.sub(r"\s+", " ", lab)
+                ctx_txt = re.sub(r"\s+", "", " ".join(hdr_ctx + [c_]))                       # 1.83/1.85: 중요한 문구(연금개시전·연금개시후)는 항목 이름에 반드시 넣는다
+                for ph in sorted((x for x in PC_KEY_PHRASES if x in ctx_txt and x not in lab), key=ctx_txt.find, reverse=True):
+                    lab = ph + " " + lab
                 if lab.startswith(("주피보험자", "종피보험자")):
                     lab = lab[:2] + lab[5:]
                 bars.append((lab, val, (re.sub(r"\s*\([^)]*\)\s*$", "", _pc_short_amt(re.sub(r"^(?:재해\d급|\d+세|주피보험자|종피보험자)\s*", "", ln))) if multi and not ln.startswith("일시금") else _pc_short_amt(ln)), [n for n in nums]))
-            prev = []
+            if not re.match(r"^\s*[-→]", c_):                # 이어지는 줄(-…, →…)은 앞 설명을 이어 쓴다
+                prev = []
         if bars:
             out.append(dict(name=gr["name"], spec=gr["spec"], bars=bars))
     return out
 
 
-PC_GR = dict(x0=312, x1=1142, colw=830, gap=31, top=196, bot=742, hdr=34, row=32, pad=14)
+_PCS = PC_FONT_STEP - 3          # 1.90: 3단계(1.88 기준)에서 몇 단계 벗어났는지 — 막대 쪽 치수를 이 값으로 계산한다
+PC_GR = dict(x0=727.5 - (1100 + 60 * _PCS) / 2, colw=1100 + 60 * _PCS, gap=31, top=196, bot=742, hdr=46 + 2 * _PCS, row=45 + 3 * _PCS, pad=14,
+             hty=33 + 2 * _PCS, ty=31 + 2 * _PCS, bar_x=385 + 35 * _PCS, bar_w=300 - 20 * _PCS)
 
 
+PC_KEY_PHRASES = ("연금개시전", "연금개시후")                                                              # 항목 이름에 빠지면 안 되는 문구
 PC_BAR_COLORS = ["#8FB8E8", "#F0A98C", "#92D0A8", "#E8C26A", "#E59BB5", "#8ED0D0", "#B7C98A"]   # 진하지 않은 항목별 막대 색(앞에서부터 쓰고 모자라면 돌려 쓴다)
 PC_HEAD_FILL, PC_HEAD_INK, PC_HEAD_SUB = "#C7B8F2", "#2F2466", "#4C3C99"                        # 급부 머리글: 밝은 보라 바탕 + 진한 보라 글자
 
 
 def _pc_cat(lab, gname):
     """막대 색을 나누는 항목 이름: 교통 / 특정암 / 연령별 사망 / 주피·종피, 그 밖에는 급부 하나가 한 색."""
+    lab = re.sub(r"^(?:연금개시[전후]\s*)+", "", lab)
     if "교통" in lab:
         return "교통"
     if "특정암" in lab:
@@ -21861,7 +21964,7 @@ def prodcov_graph_slides(entries):
         short = _short_name(p["name"])
         who = p["ins"].get(p["groups"][0]["spec"], "") or next(iter(p["ins"].values()), "")
         for pi, pb in enumerate(pages):
-            slides.append(dict(kind="pcgraph", label=f"{short} / 가입상품 보장내역" + (f" ({pi + 1}/{len(pages)})" if len(pages) > 1 else ""),
+            slides.append(dict(kind="pcgraph", fs_up=PC_UP, label=f"{short} / 가입상품 보장내역" + (f" ({pi + 1}/{len(pages)})" if len(pages) > 1 else ""),
                                headline="보장금액 한눈에 보기" + ("" if pi == 0 else " (계속)"), head_center=True,
                                sub=(f"{who}님 / " if who else "") + f"발급 {p['issued']}" + (f" / 발급자 {p['by']}" if p["by"] else ""),
                                blocks=pb, quotes=[]))                      # 화면 금액은 '만' 단위로 줄여 쓰므로 원문 대조 대신 아래에서 숫자 누락을 직접 확인
@@ -21883,24 +21986,24 @@ def _draw_pcgraph(D, s):
         x = G["x0"] + b["col"] * (G["colw"] + G["gap"])
         y = b["y"]
         D.box(x, y, G["colw"], G["hdr"], fill=PC_HEAD_FILL, r=6)
-        D.text(x + 26, y + 24, b["name"], 17, PC_HEAD_INK, True)
+        D.text(x + 26, y + G["hty"], b["name"], PC_SIZE + 2, PC_HEAD_INK, True)
         if b["spec"]:
-            D.text(x + G["colw"] - 26, y + 24, b["spec"], 15.5, PC_HEAD_SUB, True, "R")
+            D.text(x + G["colw"] - 26, y + G["hty"], b["spec"], PC_SIZE, PC_HEAD_SUB, True, "R")
         y += G["hdr"]
         vmax = max(v for _l, v, _t, _n in b["bars"]) or 1
-        lab_w, bar_x, bar_w = 190, x + 236, 330
+        lab_w, bar_x, bar_w = 190, x + G["bar_x"], G["bar_w"]
         for i, (lab, v, txt, _n) in enumerate(b["bars"]):
             if i % 2 == 0:
                 D.box(x, y, G["colw"], G["row"], fill="#F3F5F9")
-            ty = y + 22
-            D.text(x + 26, ty, lab, 15.5, ink, True)
+            ty = y + G["ty"]
+            D.text(x + 26, ty, lab, PC_SIZE, ink, True)
             bw = max(6, bar_w * v / vmax)
-            bw = max(6, min(bw, x + G["colw"] - 26 - (bar_x + 10) - D.width(txt, 15.5, True)))
-            D.box(bar_x, y + 7, bw, G["row"] - 14, fill=b["colors"][i], r=3)
-            D.text(bar_x + bw + 10, ty, txt, 15.5, "#A80F0F", True)
+            bw = max(6, min(bw, x + G["colw"] - 26 - (bar_x + 10) - D.width(txt, PC_SIZE, True)))
+            D.box(bar_x, y + 10, bw, G["row"] - 20, fill=b["colors"][i], r=3)
+            D.text(bar_x + bw + 10, ty, txt, PC_SIZE, "#A80F0F", True)
             y += G["row"]
         D.line(x, y + 4, x + G["colw"], y + 4, "#9CA3AF", 1.2)
-    D.text(G["x0"] + 26, 764, "막대는 급부 안에서 가장 큰 금액을 기준으로 한 길이. 금액 단위 원(만 = 만원).", 14, gray)
+    D.text(G["x0"] + 26, 764, "막대는 급부 안에서 가장 큰 금액을 기준으로 한 길이. 금액 단위 원(만 = 만원).", PC_SIZE - 3, gray)   # 보조 설명 글자
 
 
 def prodcov_slides(entries):
@@ -21957,7 +22060,7 @@ def prodcov_slides(entries):
                  ("월납입보험료", f"{prem:,}원", f"납기 {main[3]}")]
         who = f"{p['insured']}님 / " if p["insured"] else ""
         for pi, bars in enumerate(pgs):
-            slides.append(dict(kind="other", label=f"{_short_name(p['name'])} / 상품별 가입 현황" + (f" ({pi + 1}/{len(pgs)})" if len(pgs) > 1 else ""),
+            slides.append(dict(kind="other", fs_up=PC_UP, label=f"{_short_name(p['name'])} / 상품별 가입 현황" + (f" ({pi + 1}/{len(pgs)})" if len(pgs) > 1 else ""),
                                headline=head_end, sub=f"{who}발급 {p['issued']}" + (f" / 발급자 {p['by']}" if p["by"] else ""),
                                bars=bars, cards=cards, note=note.strip(),
                                quotes=[f"{prem:,}원", e2]))
@@ -22293,33 +22396,34 @@ def _draw_extra(D, s):
         else:
             vmax = _nice_max(max([r[1] for r in rows] + [1]))
             step = max(1, round(vmax / 5)) if k == "contracts" else vmax / 5
-        D.text(67, 235, title, 16, "#1F2937", True)
+        up = s.get("fs_up", 0)
+        D.text(67, 235, title, (BASE_FS + up) if up else 16, "#1F2937", True)
         n = len(rows)
         bar_h = 34 if n <= 8 else (30 if n <= 10 else 26)
         gap = 14 if n <= 8 else 10
-        lw_ = {"score": 110, "bodymap": 130, "contracts": 230, "other": 230}[k]
+        lw_ = {"score": 110, "bodymap": 130, "contracts": 230, "other": 230 + 6 * up}[k]
         if rows:
-            D.hbars(67, 250, 790, [(a, b, c) for a, b, c, _ in rows], vmax, step, axis, lw_, bar_h, gap, show_val=False)
+            D.hbars(67, 250, 790, [(a, b, c) for a, b, c, _ in rows], vmax, step, axis, lw_, bar_h, gap, show_val=False, up=up)
         pw_ = 790 - lw_
         for i, (nm, v, col, lab) in enumerate(rows):
             by = 250 + 20 + i * (bar_h + gap)
             bw = max(8.0, (pw_ - 20) * v / vmax)
             tx = 67 + lw_ + 10 + bw
             if bw >= 100:
-                D.text(tx - 12, by + bar_h / 2 + 6, lab, 15, "#111111" if (col == AN_C_LOW or col in PC_BAR_COLORS) else "#FFFFFF", True, "R")
+                D.text(tx - 12, by + bar_h / 2 + 6 + up / 2, lab, (BASE_FS + up - 2) if up else 15, "#111111" if (col == AN_C_LOW or col in PC_BAR_COLORS) else "#FFFFFF", True, "R")
             else:
-                D.text(tx + 10, by + bar_h / 2 + 6, lab, 15, "#111111")
+                D.text(tx + 10, by + bar_h / 2 + 6 + up / 2, lab, (BASE_FS + up - 2) if up else 15, "#111111")
         if k == "other":
             if not rows:
                 D.text(110, 420, "분석 보장항목에 연결된 특약 없음.", 22, AN_GRAY)
             for i, (t, l1, l2) in enumerate(s["cards"]):
                 y0 = 192 + i * 130
                 D.box(918, y0, 470, 112, fill="#FFFFFF", stroke=AN_CARD_LINE, r=10, lw=2)
-                D.text(942, y0 + 34, t, 16, "#4B5563")
-                D.text(1364, y0 + 68, l1, 24, AN_INK, True, "R")
-                D.text(1364, y0 + 98, l2, 14, AN_GRAY, False, "R")
+                D.text(942, y0 + 34, t, (BASE_FS + up - 2) if up else 16, "#4B5563")
+                D.text(1364, y0 + 68, l1, 24 + up, AN_INK, True, "R")
+                D.text(1364, y0 + 98, l2, (NOTE_FS + up - 2) if up else 14, AN_GRAY, False, "R")
             if s["note"]:
-                D.para(918, 600, 470, [(s["note"], False)], 14, AN_GRAY, 1.5)
+                D.para(918, 600, 470, [(s["note"], False)], (NOTE_FS + up - 2) if up else 14, AN_GRAY, 1.5)
         else:
             _insight(D, s, 196, 420 if k != "bodymap" else 440)
             if k == "bodymap":
