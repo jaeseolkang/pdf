@@ -1,4 +1,4 @@
-# 2026-11-17 KST | 수정: 요약 리포트 맨 끝에 보험이 필요한 이유 2~3줄 추가 (APP_VERSION 1.71) | 이전: 권장 사항 번호·쌍점 항목 구분 (1.70)
+# 2026-11-21 KST | 수정: 상품별 가입 현황 막대 그래프도 항목별 연한 색(PC_BAR_COLORS), 막대 안 글자는 진한 색 (APP_VERSION 1.77) | 이전: 급부가 쪽 끝에 걸리지 않게 통째로 넘김
 """
 보장분석 보고서 요약 PDF 생성기
 ==================================
@@ -210,7 +210,7 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, HRFlowable, Im
                                 NextPageTemplate, PageBreak, PageTemplate, Paragraph, Spacer, Table,
                                 TableStyle)
 
-APP_VERSION = "1.71"        # 이 파일을 수정할 때마다 올린다
+APP_VERSION = "1.82"        # 이 파일을 수정할 때마다 올린다
 MAKE_REPORT_PDF = True            # 1.64: 분석 결과 500자 요약 리포트(<이름>_요약리포트.pdf)를 함께 만든다
 REPORT_CHARS = 500                # 요약 리포트 글자 수(공백 포함)
 MAKE_SUMMARY_PDF = False         # 1.63: 요약 PDF(<이름>_요약.pdf)를 만들지 않는다. True 로 바꾸면 예전처럼 함께 저장(분석 PDF 를 못 만든 경우는 요약 PDF 를 대신 만든다)
@@ -15549,6 +15549,8 @@ def classify(idx, text):
     zone = _nos(title_zone(text)).lower()
     if idx == 0 and "고객님을위한" in zone:
         return "cover", "표지", ""
+    if "가입상품보장내역" in zone:                                    # 1.72: 가입상품 보장내역 → 상품별 가입 현황으로 읽는다
+        return "prodcov", "가입상품 보장내역", find_part(text, "가입상품 보장내역") or ""
     compare = _nos(COMPARE_KEY) in zone
     best = None
     for kw, kind in KINDS:
@@ -15613,6 +15615,8 @@ def run_parser(e, ctx):
         canonical_names(d["products"], ctx["contracts"])
         e["title"] += " " + suffix
         return dict(d=d, labels=labels, groups=groups)
+    if k == "prodcov":
+        return parse_prodcov_page(pg)
     if k == "body":
         return dict(body=parse_body(pg))
     if k == "ages":
@@ -20027,14 +20031,14 @@ def build_pdf(entries, ctx, out_path, analysis=True, only=None):
 
 def _front_pages(e):
     """분석 PDF 맨 앞에 수정 전 그대로 넣는 쪽: 원본 1쪽(표지)과 보험 가입 현황(계약 및 납입현황)."""
-    return e["n"] == 1
+    return e["n"] == 1 and e["kind"] != "prodcov"
 
 
 TOC_STANDARD = ("표지", "Pride of KYOBO", "유의사항", "보험 가입 현황", "세대 보장요약", "종합요약", "세대 분석", "상품별 분석",
                 "신체부위별 보장현황", "보장밸런스(그래프)", "연령별 분석", "보장항목별 분석", "타사 상품별 가입 현황", "보장 제안",
                 "보장 제안 전/후 비교", "상품별 분석 전/후 비교", "연령별 분석 전/후 비교", "신체부위별 보장현황 전/후 비교",
                 "보장밸런스(그래프) 전/후 비교", "컨설팅 종합의견")   # 1.53: 기준 목차 1~20번 (앞으로 고르는 모든 문서는 이 안에 있다)
-TOC_ALIAS = {"아무것도 하지 않으면 아무일도 일어나지 않는다.": "Pride of KYOBO", "보장밸런스": "보장밸런스(그래프)",
+TOC_ALIAS = {"가입상품 보장내역": "타사 상품별 가입 현황", "아무것도 하지 않으면 아무일도 일어나지 않는다.": "Pride of KYOBO", "보장밸런스": "보장밸런스(그래프)",
              "보장밸런스 전/후 비교": "보장밸런스(그래프) 전/후 비교", "보장밸런스 전/후비교": "보장밸런스(그래프) 전/후 비교",
              "전/후 비교": "보장 제안", "세대 보장 제안 전/후 비교": "보장 제안 전/후 비교",
              "신체부위별 보장현황 전/후비교": "신체부위별 보장현황 전/후 비교"}
@@ -20107,7 +20111,11 @@ def convert(src, out):
         _prepare(entries, ctx)
         # 1) 분석 PDF — 제일 우선. 만들지 못하면 오류로 멈춘다.
         # 맨 앞 1·2쪽(표지, 계약 및 납입현황)은 수정 전과 똑같은 요약 쪽, 그 뒤에 분석 쪽
-        n_ana, _ = build_pdf(entries, ctx, ap, analysis=True, only=_front_pages)
+        if any(_front_pages(e) for e in entries):
+            n_ana, _ = build_pdf(entries, ctx, ap, analysis=True, only=_front_pages)
+        else:                                                      # 1.72: 맨 앞 표지 쪽이 없는 문서(가입상품 보장내역만) — 분석 쪽만으로 PDF 를 만든다
+            _sl = build_analysis_pdf(entries, ctx, ap)
+            n_ana = len(_sl) if _sl else 0
         if n_ana:
             with pdfplumber.open(str(ap)) as pa:
                 n_all = len(pa.pages)
@@ -20120,7 +20128,7 @@ def convert(src, out):
                 pass
             print("[분석] 분석 PDF 를 만들지 못했습니다(분석할 데이터 없음). 요약 PDF 가 주 결과물입니다.")
         # 1-2) 요약 리포트 PDF(1.64) — 분석 PDF 의 숫자를 6하 원칙 서술형·구어체 500자로 정리한 1쪽. 실패해도 분석 PDF 는 그대로 둔다.
-        if MAKE_REPORT_PDF and res["analysis"]:
+        if MAKE_REPORT_PDF and res["analysis"] and ctx.get("name"):          # 1.72: 고객 이름이 없는 문서(가입상품 보장내역만)는 요약 리포트를 만들지 않는다
             try:
                 rp, nchar = make_report_pdf(ap, report_path(out))
                 res["report"] = rp
@@ -20246,8 +20254,8 @@ def analysis_slides(entries, ctx):
     A = analysis_data(entries, ctx)
     items = A["items"]
     slides = []
-    if not items:
-        return slides
+    if not items:                                                 # 1.72: 보장분석 보고서가 아니라 `가입상품 보장내역`만 있는 PDF 는 상품별 가입 현황 쪽만 만든다
+        return prodcov_main_slides(entries) + prodcov_slides(entries) + prodcov_detail_slides(entries, True)
     total = len(items)
     cnt = {k: sum(1 for it in items if it["status"] == k) for k in ("적정", "부족", "미보장")}
     ok, low, none = cnt["적정"], cnt["부족"], cnt["미보장"]
@@ -20523,7 +20531,7 @@ def analysis_slides(entries, ctx):
     # 1.28: 원본 쪽 순서대로 정렬(같은 구간 안에서는 만든 순서 유지). 3쪽 → 4~7쪽 → 8쪽 → 9~10쪽 → 11~24쪽 → 25쪽 → 정리자 제안
     # 1.53: 기준 목차 순서 — 5 세대 보장요약(summary) → 6 종합요약(score) → 7 세대 분석(area) → 8 상품별 분석(diag … contracts)
     src_order = {"enroll": -1, "summary": 0, "score": 1, "area": 2, "diag": 2, "death": 2, "chemo": 2, "uncovered": 2, "stable": 2,
-                 "stablechart": 2, "contracts": 3, "bodyfig": 4, "bodymap": 4, "ages": 5, "agetable": 5, "other": 6, "proposal": 7, "plan": 8}
+                 "stablechart": 2, "contracts": 3, "bodyfig": 4, "bodymap": 4, "ages": 5, "agetable": 5, "other": 6, "pcdetail": 6, "pcgraph": 6, "proposal": 7, "plan": 8, "pcnoamt": 9}
     slides.sort(key=lambda s_: src_order.get(s_["kind"], 1))
     return slides
 
@@ -20736,7 +20744,10 @@ def _slide_frame(D, s, n, N, name, basis):
     D.box(hx, hy, hw, hh, fill=AN_HEAD_FILL, r=12)
     D.text(hx + 28, hy + 30, s["label"], 15, AN_HEAD_SUB, True)
     D.text(hx + hw - 28, hy + 30, (f"{name} 고객님 / 분석" if name else "분석"), 15, AN_HEAD_SUB, False, "R")
-    D.text(hx + 28, hy + 74, s["headline"], D_fit_head(D, s["headline"], hw - 56), AN_HEAD_TEXT, True)
+    if s.get("head_center"):                                        # 1.81: 짧은 제목은 헤더 박스 가운데에 놓는다
+        D.text(hx + hw / 2, hy + 74, s["headline"], D_fit_head(D, s["headline"], hw - 56), AN_HEAD_TEXT, True, "C")
+    else:
+        D.text(hx + 28, hy + 74, s["headline"], D_fit_head(D, s["headline"], hw - 56), AN_HEAD_TEXT, True)
     D.text(67, 172, s["sub"], 23, AN_SUB)
     c.saveState()                                                   # 꼬리말: 요약 쪽(draw_footer)과 같은 선·글자 크기·위치
     c.setStrokeColor(colors.HexColor("#D1D5DB"))
@@ -20751,8 +20762,27 @@ def _slide_frame(D, s, n, N, name, basis):
     D.armed = True
 
 
+SLIDE_SCALE = 1.0                     # 1.79: 분석 PDF 모든 쪽의 본문(머리글 아래~꼬리말 위)을 이 비율로 줄여 좌우·아래 여백을 넓힌다(1.0 = 줄이지 않음)
+SLIDE_ANCHOR = (723.5, 190.0)         # 줄일 때 고정하는 점(본문 가로 가운데, 머리글 아래 위쪽)
+
+
 def _draw_slide(D, s, n, N, ctx):
+    """틀(머리글·꼬리말·tall)은 그대로 두고, 본문만 SLIDE_SCALE 로 줄여 모든 쪽에 같은 여백을 준다."""
     _slide_frame(D, s, n, N, ctx.get("name", ""), ctx.get("basis", ""))
+    c = D.c
+    c.saveState()
+    if SLIDE_SCALE != 1.0:
+        ax, ay = D.X(SLIDE_ANCHOR[0]), D.Y(SLIDE_ANCHOR[1])
+        c.translate(ax, ay)
+        c.scale(SLIDE_SCALE, SLIDE_SCALE)
+        c.translate(-ax, -ay)
+    try:
+        _draw_slide_body(D, s, n, N, ctx)
+    finally:
+        c.restoreState()
+
+
+def _draw_slide_body(D, s, n, N, ctx):
     k = s["kind"]
     if k == "summary":
         # 1.50: 2쪽과 같은 배치 — 본문은 왼쪽 2/3, 오른쪽 1/3 에 진단 엠블럼(새 로고 디자인)
@@ -20887,6 +20917,10 @@ def _draw_slide(D, s, n, N, ctx):
         D.para(950, 326 + max(len(rows_), 1) * 40 + 14, 410, [(s["note"], False)], 14, AN_GRAY, 1.4)
     elif k == "bodyfig":
         _draw_bodyfig(D, s)
+    elif k in ("pcdetail", "pcnoamt"):
+        _draw_pcdetail(D, s)
+    elif k == "pcgraph":
+        _draw_pcgraph(D, s)
     elif k in X_KINDS:
         _draw_extra(D, s)
     elif k == "plan":
@@ -21300,6 +21334,636 @@ def age_table_slides(A):
                  sub=f"{order[jl]}에는 {len(labs)}개 항목 중 {cnt[jl]}개만 유지", cats=order, vals=cnt, vmax=len(labs), cards=cards, quotes=[])]
 
 
+# ---- 1.73: 가입상품 보장내역 — 빠짐없는 요약(표) ----
+_PC_HANGUL = re.compile(r"[가-힣]")
+
+
+def _pc_join(parts, corpus=""):
+    """줄바꿈으로 갈라진 글을 잇는다. parts = [(글, 줄 끝 x, 다음 글자 폭)] 또는 글.
+    원본은 글자 단위로 줄을 바꾸고 줄 끝의 띄어쓰기는 지워 버린다. 그래서 앞 줄이 칸을 꽉 채웠을 때만 판단한다:
+    이어 붙인 글자(앞 줄 끝 2자+뒷 줄 첫 2자)가 같은 문서의 다른 곳에 한 줄로 나오거나, 뒷 줄 첫 말이 2자 이하(글자 한두 개가 넘친 것)이면
+    글자 중간에서 바뀐 것으로 보고 붙이고, 그 밖에는 한 칸 띄운다."""
+    out, prev_x1 = "", None
+    for p in parts:
+        t, x1, cw = (p, None, None) if isinstance(p, str) else p
+        t = t.strip()
+        if not t:
+            continue
+        if not out:
+            out = t
+        else:
+            glue = False
+            if _PC_HANGUL.fullmatch(out[-1]) and _PC_HANGUL.match(t[0]) and prev_x1 is not None and x1 is not None and (PC_COL_RIGHT - prev_x1) < 2.2 * cw:
+                lastw = re.split(r"[^가-힣0-9A-Za-z]", out.split()[-1])
+                lastw = next((x for x in reversed(lastw) if x), "")           # 앞 줄 마지막 말(기호 뒤 덩어리)
+                a = lastw[-2:]
+                w0 = re.match(r"[가-힣0-9A-Za-z]+", t.split()[0])
+                w0 = w0.group(0) if w0 else ""
+                b = w0[:2]
+                glue = len(w0) <= 2 or len(lastw) <= 1 or (len(a + b) >= 3 and (a + b) in corpus)
+            out += t if glue else " " + t
+        prev_x1 = x1 if x1 is not None else prev_x1
+    return out
+
+
+def _pc_merge_amount_rows(items):
+    """보장내역 칸이 위아래로 합쳐진 경우(조건 글 하나에 금액 줄이 여러 개)를 다시 묶는다.
+    조건 글이 없는 금액만의 행은 가장 가까운 조건 행에 붙인다(같은 거리면 자기 금액이 있는 쪽, 그다음 위쪽)."""
+    idx = [i for i, it in enumerate(items) if it[0] == "행"]
+    anchors = [i for i in idx if items[i][1]]
+    if not anchors:
+        return items
+    amt = {i: ([(i, items[i][2])] if items[i][2] else []) for i in idx}
+    drop = set()
+    for i in idx:
+        if items[i][1] or not items[i][2]:
+            continue
+        j = min(anchors, key=lambda a: (abs(a - i), 0 if items[a][2] else 1, a))
+        amt[j] = sorted(amt[j] + amt[i], key=lambda x: x[0])
+        drop.add(i)
+    out = []
+    for i, it in enumerate(items):
+        if i in drop:
+            continue
+        out.append((it[0], it[1], "\n".join(a for _, a in amt[i])) if it[0] == "행" and i in amt else it)
+    return out
+
+
+PC_COL_RIGHT = 471.0              # 보장내역 칸 오른쪽 끝(글자가 이보다 더 갈 수 없는 위치)
+_PC_AMT_SPLIT = re.compile(r"\s+(?=(?:재해\d급|\d+세\s|주피보험자\s|종피보험자\s|매년\s|일시금\s|전년도))")
+
+
+def _pc_amt_lines(a):
+    """보장금액 칸 글을 항목별 줄로 나눈다(재해2급 …, 60세 …, 주피보험자 … 등)."""
+    return [x.strip() for x in _PC_AMT_SPLIT.split(a) if x.strip()]
+
+
+def parse_prodcov_page(pg):
+    """가입상품 보장내역 한 쪽 → dict(name, insured, issued, by, specs[(특약명, 가입금액, 보기, 납기, 보험료)],
+    groups[dict(spec, insured, name, items[(종류, 보장내역, 보장금액)])], benefits(막대용), chars_in, chars_out)
+    칸 나누기는 글자 위치(x)로 한다: 보장대상 <90, 특약명 90~160, 급부명 160~238, 보장내역 238~474, 보장금액 474~."""
+    text = pg.extract_text() or ""
+    g = lambda p: (re.search(p, text) or [None, ""])[1]
+    d = dict(name=g(r"\[상품명\]\s*(.+)").strip(), issued=g(r"\[발급일자\]\s*:\s*([\d.]+)"), by=g(r"\[발급자\]\s*:\s*(\S+)"),
+             insured="", specs=[], groups=[], benefits=[], chars_in=0, chars_out=0)
+    on = False
+    for ln in text.splitlines():
+        s = ln.strip()
+        if s.startswith("특약명") and "가입금액" in s:
+            on = True
+            continue
+        if on and s.startswith("보장대상"):
+            break
+        m = re.fullmatch(r"(\S+)\s+([\d,]+)\s+(\S+)\s+(\S+)\s+([\d,]+)", s) if on else None
+        if m:
+            d["specs"].append(m.groups())
+    words = pg.extract_words()
+    hdr = next((w for w in words if w["text"] == "보장대상" and w["x0"] < 99), None)
+    if hdr is None:
+        return d
+    cut = min([w["top"] for w in words if w["text"].startswith("[발급일자]")] or [pg.height]) - 4
+    body = [w for w in words if w["top"] > hdr["top"] + 8 and w["top"] < cut]
+    d["chars_in"] = sum(len(w["text"]) for w in body)
+    lines = []
+    for w in sorted(body, key=lambda w: (w["top"], w["x0"])):
+        if lines and abs(w["top"] - lines[-1]["top"]) <= 2.5:
+            lines[-1]["ws"].append(w)
+        else:
+            lines.append(dict(top=w["top"], ws=[w]))
+    corpus = "\n".join(" ".join(w["text"] for w in sorted(ln["ws"], key=lambda w: w["x0"]) if 238 <= w["x0"] < 474) for ln in lines)
+    colA, colB, colC, cells, notes = [], [], [], [], []
+    note_on = False
+    for ln in lines:
+        ws = sorted(ln["ws"], key=lambda w: w["x0"])
+        if ws[0]["text"].startswith("※"):
+            note_on = True
+            notes.append(dict(top=ln["top"], parts=[]))
+        elif note_on and any(w["x0"] < 90 for w in ws):
+            note_on = False
+        if note_on:
+            notes[-1]["parts"].append(" ".join(w["text"] for w in ws))
+            continue
+        for lo, hi, store in ((0, 90, colA), (90, 160, colB), (160, 238, colC)):
+            t = " ".join(w["text"] for w in ws if lo <= w["x0"] < hi)
+            if t:
+                store.append((ln["top"], t))
+        dws = [w for w in ws if w["x0"] >= 238]
+        dl = [w for w in dws if w["x0"] < 474]
+        dt = " ".join(w["text"] for w in dl)
+        et = " ".join(w["text"] for w in dws if w["x0"] >= 474)
+        if dt or et:
+            fw = dws[0]
+            cells.append((min(w["top"] for w in dws), dt, et, max([w["x1"] for w in dl] or [0]),
+                          ((dl[0]["x1"] - dl[0]["x0"]) / max(len(dl[0]["text"]), 1)) if dl else 0))
+
+    def anchors(col, gap=16):
+        out = []
+        for top, t in col:
+            if out and top - out[-1]["last"] <= gap:
+                out[-1]["text"] += t
+                out[-1]["last"] = top
+            else:
+                out.append(dict(text=t, top=top, last=top))
+        return out
+    specs_a, ben_a = anchors(colB), anchors(colC)
+    rows, cur, last = [], None, None
+    for top, dt, et, x1, cw in cells:                             # 위아래 15 이하로 붙은 줄은 한 칸(행)
+        if cur is not None and top - last <= 15.5:
+            cur["d"].append((dt, x1, cw))
+            cur["e"].append(et)
+        else:
+            cur = dict(top=top, d=[(dt, x1, cw)], e=[et])
+            rows.append(cur)
+        last = top
+    groups = []
+    for b in ben_a:
+        sp = [s for s in specs_a if s["top"] <= b["top"] + 8]
+        ins = [t for top, t in colA if top <= b["top"] + 8]
+        groups.append(dict(spec=sp[-1]["text"] if sp else None, insured=ins[-1] if ins else "", name=b["text"], top=b["top"], items=[]))
+    if not groups and (rows or notes):
+        groups.append(dict(spec=None, insured="", name="", top=-1, items=[]))
+    entries_ = [(r["top"], "행", _pc_join(r["d"], corpus), "\n".join(_pc_amt_lines(re.sub(r"\(\s+", "(", " ".join(x for x in r["e"] if x))))) for r in rows] + \
+               [(n["top"], "주", _pc_join(n["parts"], corpus), "") for n in notes]
+    for top, kind, c_, a_ in sorted(entries_, key=lambda x: x[0]):
+        tgt = next((gr for gr in reversed(groups) if gr["top"] <= top + 12), groups[0] if groups else None)
+        if tgt is not None:
+            tgt["items"].append((kind, c_, a_))
+    for gr in groups:
+        gr["items"] = _pc_merge_amount_rows(gr["items"])
+    d["groups"] = groups
+    d["insured"] = next((t for _, t in colA if re.fullmatch(r"[가-힣*]{2,5}", t)), "")
+    d["chars_out"] = sum(len(re.sub(r"\s", "", x)) for x in [a["text"] for a in specs_a + ben_a] + [t for _, t in colA]
+                         + [y for gr in groups for it in gr["items"] for y in it[1:]])
+    for gr in groups:
+        amts = [int(n.replace(",", "")) for it in gr["items"] for n in re.findall(r"\d{1,3}(?:,\d{3})+", it[2])]
+        d["benefits"].append(dict(spec=gr["spec"], name=gr["name"], amts=amts, top=gr["top"]))
+    return d
+
+
+PC_X = dict(spec=67, spec_w=118, name=190, name_w=192, cond=390, cond_w=605, amt=1000, amt_w=378)   # 가입상품 보장내역 표의 칸(디자인 좌표)
+PC_SIZE, PC_LEAD, PC_PAD = 15.5, 22, 7
+PC_Y_MAX = 742
+PC_GRAPH = True      # 1.76: True = 가입상품 보장내역을 글자를 줄인 막대그래프 쪽으로, False = 전체 글을 옮긴 표 쪽(1.73~1.75)
+_PCM = Deck(None)
+
+
+def _pc_wrap(txt, maxw):
+    """글을 칸 폭(maxw)에 맞춰 줄로 나눈다. 띄어쓰기에서 나누되, 한 말이 칸보다 길면 글자 단위로 나눈다."""
+    out = []
+    for para in str(txt).replace("\u00b7", "\u318d").split("\n"):          # 글꼴에 없는 가운뎃점(·)은 같은 모양의 ㆍ 로 바꿔 그린다
+        cur = ""
+        for tok in re.findall(r"\S+\s*", para) or [""]:
+            while _PCM.width(tok.rstrip(), PC_SIZE, True) > maxw:         # 한 말이 너무 길면 글자 단위로 자른다
+                k = len(tok)
+                while k > 1 and _PCM.width(tok[:k].rstrip(), PC_SIZE, True) > maxw:
+                    k -= 1
+                if cur:
+                    out.append(cur.rstrip())
+                    cur = ""
+                out.append(tok[:k].rstrip())
+                tok = tok[k:]
+            if cur and _PCM.width((cur + tok).rstrip(), PC_SIZE, True) > maxw:
+                out.append(cur.rstrip())
+                cur = tok
+            else:
+                cur += tok
+        out.append(cur.rstrip())
+    return out or [""]
+
+
+def _pc_products(entries):
+    """1.73: `가입상품 보장내역` 의 모든 글(특약표·급부·보장내역·보장금액·※ 안내)을 빠짐없이 표로 옮긴 요약 쪽. 쪽이 넘치면 다음 쪽으로 잇는다."""
+    prods = []
+    for e in entries:
+        d = e.get("data")
+        if e["kind"] != "prodcov" or not d or not d.get("name"):
+            continue
+        if prods and prods[-1]["name"] == d["name"] and e["n"] == prods[-1]["pages"][-1] + 1:
+            p = prods[-1]
+        else:
+            p = dict(name=d["name"], issued=d["issued"], by=d["by"], specs=[], groups=[], pages=[], ins={}, last_spec=None)
+            prods.append(p)
+        p["pages"].append(e["n"])
+        p["specs"] += d["specs"]
+        if d["chars_in"] != d["chars_out"]:
+            print(f"[주의] 가입상품 보장내역 원본 {e['n']}쪽: 읽은 글자 수가 다릅니다(원본 {d['chars_in']}자 / 읽음 {d['chars_out']}자) — 빠진 글이 없는지 확인하세요.")
+        for gr in d["groups"]:
+            spec = gr["spec"] or p["last_spec"]
+            p["last_spec"] = spec
+            if gr["insured"] and spec not in p["ins"]:
+                p["ins"][spec] = gr["insured"]
+            if p["groups"] and p["groups"][-1]["spec"] == spec and p["groups"][-1]["name"] == gr["name"]:
+                p["groups"][-1]["items"] += gr["items"]                 # 쪽을 넘어 이어진 같은 급부는 하나로
+            else:
+                p["groups"].append(dict(spec=spec, name=gr["name"], items=list(gr["items"])))
+    return prods
+
+
+def prodcov_detail_slides(entries, noamt=False):
+    """1.73: `가입상품 보장내역` 의 모든 글(특약표·급부·보장내역·보장금액)을 빠짐없이 표로 옮긴 요약 쪽. 쪽이 넘치면 다음 쪽으로 잇는다.
+    1.74: 보장금액이 하나도 없는 급부(납입면제·안내사항 등)와 ※ 안내문은 이 표에서 빼고, noamt=True 로 부르면 그 내용만 모아 따로 요약한다(맨 마지막 쪽)."""
+    prods = _pc_products(entries)
+    slides = []
+    for p in prods:
+        if not p["groups"]:
+            continue
+        blocks = []                                                     # (특약명, 급부명, [(종류, 보장내역, 보장금액)])
+        for gr in p["groups"]:
+            has_amt = any(a_ for kind, c_, a_ in gr["items"] if kind == "행")
+            if not noamt:
+                its = [it for it in gr["items"] if has_amt and it[0] == "행"]
+                if its:
+                    blocks.append((gr["spec"], gr["name"], its))
+            elif not has_amt:
+                blocks.append((gr["spec"], gr["name"], [("안", c_, "") for _k, c_, _a in gr["items"]]))
+            else:
+                notes = [("안", c_, "") for k, c_, _a in gr["items"] if k == "주"]
+                if notes:
+                    blocks.append((gr["spec"], gr["name"] + " (※ 안내)", notes))
+        rows, prev_spec = [], None
+        for spec, bname, its in blocks:
+            first = True
+            ins = p["ins"].get(spec, "")
+            for kind, c_, a_ in its:
+                if kind in ("주", "안"):
+                    cl, al = _pc_wrap(c_, PC_X["cond_w"] + PC_X["amt_w"] - 20), []
+                else:
+                    cl, al = _pc_wrap(c_, PC_X["cond_w"] - 20), (_pc_wrap(a_, PC_X["amt_w"] - 24) if a_ else [])
+                sp_txt = (f"{spec}" + (f" ({ins})" if ins else "")) if (first and spec != prev_spec) else ""
+                bn = _pc_wrap(bname, PC_X["name_w"] - 12) if first else []
+                nl = max(len(cl), len(al), len(bn), len(_pc_wrap(sp_txt, PC_X["spec_w"] - 10)) if sp_txt else 0, 1)
+                rows.append(dict(gname=bname, gspec=spec, kind=kind, spec=sp_txt,
+                                 bname=bn, cond=cl, amt=al, h=nl * PC_LEAD + 2 * PC_PAD,
+                                 gstart=first, nums=re.findall(r"\d{1,3}(?:,\d{3})+", a_)))
+                first = False
+            prev_spec = spec
+        if not rows:
+            continue
+        spec_rows = [list(sp) for sp in p["specs"]] if not noamt else []
+        tot = sum(int(sp[4].replace(",", "")) for sp in p["specs"])
+        pages, cur = [], []
+        y = (196 + 34 + 34 * len(spec_rows) + 46 + 34) if spec_rows else 230      # 첫 쪽: 특약표 아래 표 머리글 줄 다음부터
+        # 1.75: 급부(항목) 단위로 쪽을 나눈다. 한 급부가 현재 쪽 남은 자리에 다 안 들어가도 '새 쪽 한 장'에는 들어가면 통째로 다음 쪽으로 넘기고,
+        #       한 쪽보다 큰 급부만 쪽을 이어 쓰되 처음 두 줄은 같은 쪽에 남긴다. 작은 급부 두세 개는 한 쪽에 모아 담는다.
+        full_cap = PC_Y_MAX - (196 + 34)
+        groups_rows, gi = [], None
+        for r in rows:
+            if r["gstart"] or gi is None:
+                groups_rows.append([])
+            groups_rows[-1].append(r)
+            gi = True
+        for grp in groups_rows:
+            gh = sum(r["h"] for r in grp)
+            room = PC_Y_MAX - y
+            if cur and gh > room:
+                if gh <= full_cap or room < sum(r["h"] for r in grp[:2]):   # 새 쪽에 통째로 들어가거나, 앞 두 줄도 못 담으면 다음 쪽부터
+                    pages.append(cur)
+                    cur, y = [], 196 + 34
+            for r in grp:                                                   # 한 쪽보다 큰 급부는 줄 단위로 이어 쓴다
+                if cur and y + r["h"] > PC_Y_MAX:
+                    pages.append(cur)
+                    cur, y = [], 196 + 34
+                cur.append(r)
+                y += r["h"]
+        pages.append(cur)
+        for pr in pages[1:]:                                            # 쪽이 바뀌어 급부 중간에서 시작하면 급부명 뒤에 (계속) 표시
+            r0 = pr[0]
+            if not r0["gstart"]:
+                r0["bname"] = _pc_wrap(r0["gname"] + " (계속)", PC_X["name_w"] - 12)
+                r0["cont"] = True
+        short = _short_name(p["name"])
+        who = p["ins"].get(p["groups"][0]["spec"], "") or next(iter(p["ins"].values()), "")
+        for pi, pr in enumerate(pages):
+            nums = [n for r in pr for n in r["nums"]]
+            quotes = list(dict.fromkeys(nums))
+            if pi == 0 and not noamt:
+                quotes += [sp[4] for sp in p["specs"]] + [f"{tot:,}"]
+            lab = "금액 없는 항목 요약" if noamt else "가입상품 보장내역"
+            head = (f"금액이 없는 항목 요약 ({len(rows)}건)" if pi == 0 else "금액이 없는 항목 요약 (계속)") if noamt else \
+                   (f"{short} 보장내역 전체 요약" if pi == 0 else f"{short} 보장내역 (계속)")
+            slides.append(dict(kind="pcnoamt" if noamt else "pcdetail", noamt=noamt, label=f"{short} / {lab}" + (f" ({pi + 1}/{len(pages)})" if len(pages) > 1 else ""),
+                               headline=head, sub=(f"{who}님 / " if who else "") + f"발급 {p['issued']}" + (f" / 발급자 {p['by']}" if p["by"] else ""),
+                               rows=pr, specs=spec_rows if pi == 0 else [], total=tot, first=(pi == 0), quotes=quotes))
+    return slides
+
+
+def _draw_pcdetail(D, s):
+    x0, x1 = PC_X["spec"], PC_X["amt"] + PC_X["amt_w"]
+    y = 196
+    ink, gray, line_c = "#0A0A0A", "#4B5563", "#D5DAE2"
+    if s["first"] and s["specs"]:
+        cols = [(x0, "특약명", "L"), (x0 + 330, "가입금액(원)", "R"), (x0 + 490, "보기", "R"), (x0 + 640, "납기", "R"), (x1 - 14, "보험료(원)", "R")]
+        D.box(x0, y, x1 - x0, 34, fill=BF_HEAD, r=6)
+        for cx, t, al in cols:
+            D.text(cx + (12 if al == "L" else 0), y + 24, t, 15.5, "#FFFFFF", True, al)
+        y += 34
+        for i, sp in enumerate(s["specs"]):
+            D.box(x0, y, x1 - x0, 34, fill="#F3F5F9" if i % 2 == 0 else "#FFFFFF")
+            vals = [sp[0], sp[1], sp[2], sp[3], sp[4]]
+            for (cx, _t, al), v in zip(cols, vals):
+                D.text(cx + (12 if al == "L" else 0), y + 24, v, 15.5, ink, True, al)
+            y += 34
+        D.line(x0, y + 1, x1, y + 1, "#1F3F7A", 2)
+        D.text(x0 + 12, y + 26, "월 보험료 합계", 15.5, ink, True)
+        D.text(x1 - 14, y + 26, f"{s['total']:,}", 17.5, "#A80F0F", True, "R")
+        y += 46
+    D.box(x0, y, x1 - x0, 34, fill=BF_HEAD, r=6)
+    for cx, t in ((PC_X["spec"] + 12, "특약명"), (PC_X["name"] + 6, "급부명"), (PC_X["cond"] + 6, "보장내역")):
+        D.text(cx, y + 24, t, 15.5, "#FFFFFF", True)
+    if not s.get("noamt"):
+        D.text(PC_X["amt"] + PC_X["amt_w"] - 14, y + 24, "보장금액", 15.5, "#FFFFFF", True, "R")
+    y += 34
+    for r in s["rows"]:
+        h = r["h"]
+        if r["gstart"]:
+            D.line(x0, y, x1, y, "#9CA3AF", 1.4)
+        else:
+            D.line(PC_X["cond"], y, x1, y, line_c, 1)
+        if r["kind"] == "주":
+            D.box(x0, y + 1, x1 - x0, h - 1, fill="#FFF8E7")
+        ty = y + PC_PAD + 16
+        for i, t in enumerate(r["bname"]):
+            D.text(PC_X["name"] + 6, ty + i * PC_LEAD, t, PC_SIZE, gray if r.get("cont") else ink, True)
+        if r["spec"]:
+            for i, t in enumerate(_pc_wrap(r["spec"], PC_X["spec_w"] - 10)):
+                D.text(PC_X["spec"] + 6, ty + i * PC_LEAD, t, PC_SIZE, gray, True)
+        for i, t in enumerate(r["cond"]):
+            D.text(PC_X["cond"] + 6, ty + i * PC_LEAD, t, PC_SIZE, ink, True)
+        for i, t in enumerate(r["amt"]):
+            D.text(PC_X["amt"] + PC_X["amt_w"] - 10, ty + i * PC_LEAD, t, PC_SIZE, "#A80F0F", True, "R")
+        y += h
+    D.line(x0, y, x1, y, "#9CA3AF", 1.4)
+
+_PC_MONEY = re.compile(r"(\d{1,3}(?:,\d{3})+|\d+)\s*원")
+
+
+def _pc_man(n):
+    """원 → 짧은 금액 글(500만, 1.5만, 1억)"""
+    if n >= 100000000 and n % 100000000 == 0:
+        return f"{n // 100000000:,}억"
+    if n >= 10000:
+        v = n / 10000
+        return f"{v:,.0f}만" if v == int(v) else f"{v:,.1f}만"
+    return f"{n:,}원"
+
+
+def _pc_short_amt(t):
+    """금액 글을 짧게: '매년 5,000,000원 × 10년지급' → '매년 500만 × 10년'"""
+    t = re.sub(r"\s+", " ", t.replace("\n", " ")).strip().strip(")").strip()
+    t = _PC_MONEY.sub(lambda m: _pc_man(int(m.group(1).replace(",", ""))), t)
+    t = t.replace("지급", "").replace("＋", "+").replace("연금개시전까지", "").replace("  ", " ")
+    return re.sub(r"\s*×\s*", " × ", t).strip()
+
+
+def _pc_label(prev, c, a_line):
+    """급부 안의 한 항목을 짧은 이름으로 줄인다(긴 문장 → 핵심 낱말). 규칙에 안 맞으면 앞 14자."""
+    t = re.sub(r"\s+", "", " ".join(prev + [c]))
+    cc = re.sub(r"\s+", "", c)
+    who = "주피 " if cc.startswith("주피보험자") else ("종피 " if cc.startswith("종피보험자") else "")
+    m = re.search(r"기준:(.+)$", cc)
+    if m:
+        return ("일반사망 " if "재해이외의원인으로사망" in t else "사망 ") + m.group(1)
+    m = re.fullmatch(r"(재해)?제(\d)급의?장해상태시", cc)
+    if m:
+        return (("재해 " if m.group(1) else "") + f"{m.group(2)}급 장해")
+    m = re.match(r"^(재해)?(\d)급", a_line.replace(" ", ""))
+    if m and not a_line.startswith("매"):
+        return who + (("재해 " if m.group(1) else "") + f"{m.group(2)}급 장해")
+    if "2년이내" in cc and "단" in cc:
+        return "2년 이내 감액"
+    if "교통재해이외" in t:
+        return "교통 외 재해 사망"
+    if "교통재해" in t:
+        return "교통재해 " + ("입원" if "입원" in t else "사망")
+    if "특정암이외" in t:
+        return "특정암 외 암 사망"
+    if "특정암" in t:
+        return "특정암 사망"
+    if "제1급" in cc and "사망" in cc:
+        return ("암 " if "암을" in cc else ("암 외 " if "암이외" in cc else "")) + "사망·1급 장해"
+    m = re.search(r"(\d+)세이후", cc)
+    if m:
+        return f"{m.group(1)}세 이후 생존"
+    if "2인모두생존" in cc:
+        return "2인 모두 생존"
+    if "1인만생존" in cc:
+        return "1인만 생존"
+    m = re.search(r"매(\d+)년마다", cc)
+    if m:
+        return f"{m.group(1)}년마다 생존"
+    if "입원" in cc:
+        return "입원 1일당" if "1일당" in t else "입원"
+    if "생존" in cc:
+        return "생존시"
+    if "사망" in cc:
+        return "사망시"
+    cl = re.sub(r"^[\-■\s]+", "", c).strip()
+    return cl[:14] + ("…" if len(cl) > 14 else "")
+
+
+def _pc_graph_groups(p):
+    """상품 하나의 급부별 막대 목록 → [dict(name, spec, bars[(이름, 값(원), 글, 원본숫자들)])] (금액 있는 급부만)"""
+    out = []
+    for gr in p["groups"]:
+        bars, prev = [], []
+        for kind, c_, a_ in gr["items"]:
+            if kind != "행":
+                continue
+            if not a_:
+                prev.append(c_)
+                continue
+            lines, buf = [], ""
+            for ln in _pc_amt_lines(a_):
+                buf = (buf + " " + ln).strip()
+                if not buf.endswith(("＋", "+")):
+                    lines.append(buf)
+                    buf = ""
+            if buf:
+                lines.append(buf)
+            for ln in lines:
+                nums = _PC_MONEY.findall(ln)
+                if not nums:
+                    continue
+                val = int(nums[0].replace(",", ""))
+                multi = len(lines) > 1
+                if multi:                                    # 금액 칸에 항목이 여러 줄(재해2급 …, 60세 … 등)
+                    head = re.split(r"\s*\d[\d,]*\s*원", ln)[0].strip()
+                    tail = re.search(r"\(([^)]+)\)", ln)
+                    lab = (head + (f" ({tail.group(1)})" if tail else "")).strip() or _pc_label(prev, c_, ln)
+                    if head.startswith(("재해", "주피", "종피")) or re.match(r"\d+세$", head):
+                        lab = _pc_label([], c_, ln) if re.match(r"^(재해)?\d급", head) else lab
+                    if re.match(r"^재해\d급", head):
+                        lab = ("주피 " if c_.startswith("주피") else "종피 " if c_.startswith("종피") else "") + re.sub(r"재해(\d)급", r"재해 \1급 장해", head)
+                else:
+                    lab = _pc_label(prev, c_, ln)
+                lab = re.sub(r"\s+", " ", lab)
+                if lab.startswith(("주피보험자", "종피보험자")):
+                    lab = lab[:2] + lab[5:]
+                bars.append((lab, val, (re.sub(r"\s*\([^)]*\)\s*$", "", _pc_short_amt(re.sub(r"^(?:재해\d급|\d+세|주피보험자|종피보험자)\s*", "", ln))) if multi and not ln.startswith("일시금") else _pc_short_amt(ln)), [n for n in nums]))
+            prev = []
+        if bars:
+            out.append(dict(name=gr["name"], spec=gr["spec"], bars=bars))
+    return out
+
+
+PC_GR = dict(x0=312, x1=1142, colw=830, gap=31, top=196, bot=742, hdr=34, row=32, pad=14)
+
+
+PC_BAR_COLORS = ["#8FB8E8", "#F0A98C", "#92D0A8", "#E8C26A", "#E59BB5", "#8ED0D0", "#B7C98A"]   # 진하지 않은 항목별 막대 색(앞에서부터 쓰고 모자라면 돌려 쓴다)
+PC_HEAD_FILL, PC_HEAD_INK, PC_HEAD_SUB = "#C7B8F2", "#2F2466", "#4C3C99"                        # 급부 머리글: 밝은 보라 바탕 + 진한 보라 글자
+
+
+def _pc_cat(lab, gname):
+    """막대 색을 나누는 항목 이름: 교통 / 특정암 / 연령별 사망 / 주피·종피, 그 밖에는 급부 하나가 한 색."""
+    if "교통" in lab:
+        return "교통"
+    if "특정암" in lab:
+        return "특정암"
+    if re.match(r"^(일반사망|사망 )", lab):
+        return "연령사망"
+    if lab.startswith(("주피", "종피")):
+        return lab[:2]
+    return "G:" + gname
+
+
+def prodcov_graph_slides(entries):
+    """1.76: 가입상품 보장내역을 글자를 줄인 막대그래프 쪽으로 만든다. 급부 하나는 한 덩어리(머리글+막대)이고,
+    덩어리가 단 끝에 걸리면 통째로 다음 단·다음 쪽으로 넘긴다(1.75 와 같은 기준). 한 쪽(2단)을 넘는 급부만 이어 쓴다."""
+    slides = []
+    G = PC_GR
+    for p in _pc_products(entries):
+        groups = _pc_graph_groups(p)
+        if not groups:
+            continue
+        cap = G["bot"] - G["top"]
+        max_rows = (cap - G["hdr"] - G["pad"]) // G["row"]
+        blocks, cat_col = [], {}
+        for g in groups:
+            chunks = [g["bars"][i:i + max_rows] for i in range(0, len(g["bars"]), max_rows)]
+            for ci, ch in enumerate(chunks):
+                cols = []
+                for b_ in ch:
+                    cat = _pc_cat(b_[0], g["name"])
+                    cat_col.setdefault(cat, PC_BAR_COLORS[len(cat_col) % len(PC_BAR_COLORS)])
+                    cols.append(cat_col[cat])
+                blocks.append(dict(name=g["name"] + (" (계속)" if ci else ""), spec=g["spec"] if g["spec"] != "주계약" else "", bars=ch, colors=cols,
+                                   h=G["hdr"] + len(ch) * G["row"] + G["pad"]))
+        pages, cur, ys = [], [], [G["top"], G["top"]]
+        for b in blocks:
+            c = 0 if ys[0] + b["h"] <= G["bot"] else None                          # 1.77: 한 쪽에 한 단. 안 들어가면 통째로 다음 쪽
+            if c is None:
+                pages.append(cur)
+                cur, ys, c = [], [G["top"], G["top"]], 0
+            b["col"], b["y"] = c, ys[c]
+            cur.append(b)
+            ys[c] += b["h"]
+        pages.append(cur)
+        short = _short_name(p["name"])
+        who = p["ins"].get(p["groups"][0]["spec"], "") or next(iter(p["ins"].values()), "")
+        for pi, pb in enumerate(pages):
+            slides.append(dict(kind="pcgraph", label=f"{short} / 가입상품 보장내역" + (f" ({pi + 1}/{len(pages)})" if len(pages) > 1 else ""),
+                               headline="보장금액 한눈에 보기" + ("" if pi == 0 else " (계속)"), head_center=True,
+                               sub=(f"{who}님 / " if who else "") + f"발급 {p['issued']}" + (f" / 발급자 {p['by']}" if p["by"] else ""),
+                               blocks=pb, quotes=[]))                      # 화면 금액은 '만' 단위로 줄여 쓰므로 원문 대조 대신 아래에서 숫자 누락을 직접 확인
+        want = sorted(n for gr in p["groups"] if any(k == "행" and a_ for k, _c, a_ in gr["items"]) for k, _c, a_ in gr["items"] if k == "행" for n in _PC_MONEY.findall(a_))
+        have = sorted(n for g in groups for _l, _v, _t, ns in g["bars"] for n in ns)
+        if want != have:
+            print(f"[주의] 보장내역 그래프: 원본 금액 {len(want)}개 중 {len(have)}개만 막대에 들어갔습니다({p['name']}).")
+    return slides
+
+
+def prodcov_main_slides(entries):
+    return prodcov_graph_slides(entries) if PC_GRAPH else prodcov_detail_slides(entries)
+
+
+def _draw_pcgraph(D, s):
+    G = PC_GR
+    ink, gray = "#0A0A0A", "#4B5563"
+    for b in s["blocks"]:
+        x = G["x0"] + b["col"] * (G["colw"] + G["gap"])
+        y = b["y"]
+        D.box(x, y, G["colw"], G["hdr"], fill=PC_HEAD_FILL, r=6)
+        D.text(x + 26, y + 24, b["name"], 17, PC_HEAD_INK, True)
+        if b["spec"]:
+            D.text(x + G["colw"] - 26, y + 24, b["spec"], 15.5, PC_HEAD_SUB, True, "R")
+        y += G["hdr"]
+        vmax = max(v for _l, v, _t, _n in b["bars"]) or 1
+        lab_w, bar_x, bar_w = 190, x + 236, 330
+        for i, (lab, v, txt, _n) in enumerate(b["bars"]):
+            if i % 2 == 0:
+                D.box(x, y, G["colw"], G["row"], fill="#F3F5F9")
+            ty = y + 22
+            D.text(x + 26, ty, lab, 15.5, ink, True)
+            bw = max(6, bar_w * v / vmax)
+            bw = max(6, min(bw, x + G["colw"] - 26 - (bar_x + 10) - D.width(txt, 15.5, True)))
+            D.box(bar_x, y + 7, bw, G["row"] - 14, fill=b["colors"][i], r=3)
+            D.text(bar_x + bw + 10, ty, txt, 15.5, "#A80F0F", True)
+            y += G["row"]
+        D.line(x, y + 4, x + G["colw"], y + 4, "#9CA3AF", 1.2)
+    D.text(G["x0"] + 26, 764, "막대는 급부 안에서 가장 큰 금액을 기준으로 한 길이. 금액 단위 원(만 = 만원).", 14, gray)
+
+
+def prodcov_slides(entries):
+    """1.72: `가입상품 보장내역` 쪽(상품 하나가 여러 쪽에 이어질 수 있음)을 상품별 가입 현황 쪽(막대 + 카드 3개)으로 만든다.
+    막대 = 급부별 가장 큰 보장금액(원 → 만원 단위 막대), 카드 = 특약 수 / 보험 기간 / 월납입보험료."""
+    prods = []
+    for e in entries:
+        d = e.get("data")
+        if e["kind"] != "prodcov" or not d or not d.get("name"):
+            continue
+        if prods and prods[-1]["name"] == d["name"] and e["n"] == prods[-1]["pages"][-1] + 1:
+            p = prods[-1]
+        else:
+            p = dict(name=d["name"], insured=d["insured"], issued=d["issued"], by=d["by"], specs=[], bens=[], pages=[], last_spec=None)
+            prods.append(p)
+        p["pages"].append(e["n"])
+        p["specs"] += d["specs"]
+        for b in d["benefits"]:
+            b = dict(b)
+            if b["spec"] is None:
+                b["spec"] = p["last_spec"]
+            p["last_spec"] = b["spec"]
+            p["bens"].append(b)
+    slides = []
+    for p in prods:
+        if not p["specs"] or not any(b["amts"] for b in p["bens"]):
+            print(f"[주의] 분석: 가입상품 보장내역 {p['name']} (원본 {p['pages'][0]}쪽)의 특약·보장금액을 읽지 못해 슬라이드를 넣지 않았습니다.")
+            continue
+        prem = sum(int(sp[4].replace(",", "")) for sp in p["specs"])
+        main = next((sp for sp in p["specs"] if sp[0] == "주계약"), p["specs"][0])
+        life = main[2] == "종신"
+        extras = [sp for sp in p["specs"] if sp is not main]
+        terms = [int(re.sub(r"\D", "", sp[2])) for sp in p["specs"] if re.sub(r"\D", "", sp[2])]
+        if life:
+            head_end, e2 = "이 계약의 보장은 종신까지 이어져요", "종신"
+        else:
+            e2 = f"{max(terms)}년" if terms else main[2]
+            head_end = f"이 계약의 보장은 {e2} 동안 이어져요"
+        sub2 = " / ".join(f"{sp[0]} {sp[2]}" for sp in extras) if extras else f"납기 {main[3]}"
+        best = {}
+        for b in p["bens"]:
+            if b["amts"] and (b["name"] not in best or max(b["amts"]) > best[b["name"]]):
+                best[b["name"]] = max(b["amts"])
+        items = sorted(best.items(), key=lambda kv: -kv[1])
+        shown_all = items[:X_BARS_PER_PAGE * X_MAX_PAGES]
+        note = (f"외 {len(items) - len(shown_all)}개 급부는 금액이 작아 생략. " if len(items) > len(shown_all) else "") + \
+               "막대는 급부별로 가장 큰 보장금액(일당 급부는 1일 금액)."
+        def man(a):
+            return f"{a // 10000:,}" if a % 10000 == 0 else f"{a:,}원"
+        bars_all = [(lab, a / 10000.0, PC_BAR_COLORS[i % len(PC_BAR_COLORS)], man(a)) for i, (lab, a) in enumerate(shown_all)]    # 1.82: 막대마다 연한 색
+        pgs = [bars_all[i:i + X_BARS_PER_PAGE] for i in range(0, len(bars_all), X_BARS_PER_PAGE)] or [[]]
+        cards = [("특약", f"주계약 + 특약 {len(extras)}개" if extras else "주계약 1개", f"급부 {len(items)}개"),
+                 ("보험 기간", e2, sub2),
+                 ("월납입보험료", f"{prem:,}원", f"납기 {main[3]}")]
+        who = f"{p['insured']}님 / " if p["insured"] else ""
+        for pi, bars in enumerate(pgs):
+            slides.append(dict(kind="other", label=f"{_short_name(p['name'])} / 상품별 가입 현황" + (f" ({pi + 1}/{len(pgs)})" if len(pgs) > 1 else ""),
+                               headline=head_end, sub=f"{who}발급 {p['issued']}" + (f" / 발급자 {p['by']}" if p["by"] else ""),
+                               bars=bars, cards=cards, note=note.strip(),
+                               quotes=[f"{prem:,}원", e2]))
+    return slides
+
+
 def other_slides(entries):
     cons = []
     for e in entries:
@@ -21512,7 +22176,7 @@ def extra_slides(entries, ctx, A):
     ctx["docno"] = m.group(1) if m else ""
     out = []
     for fn in (lambda: enroll_slide(entries), lambda: [score_slide(entries)], lambda: contract_slides(entries, ctx), lambda: [bodyfig_slide(entries)], lambda: [bodymap_slide(entries)],
-               lambda: age_table_slides(A), lambda: other_slides(entries), lambda: [proposal_slide(entries)]):
+               lambda: age_table_slides(A), lambda: other_slides(entries), lambda: prodcov_main_slides(entries), lambda: prodcov_slides(entries), lambda: prodcov_detail_slides(entries, True), lambda: [proposal_slide(entries)]):
         try:
             out += [s for s in fn() if s]
         except Exception as ex:
@@ -21642,7 +22306,7 @@ def _draw_extra(D, s):
             bw = max(8.0, (pw_ - 20) * v / vmax)
             tx = 67 + lw_ + 10 + bw
             if bw >= 100:
-                D.text(tx - 12, by + bar_h / 2 + 6, lab, 15, "#111111" if col == AN_C_LOW else "#FFFFFF", True, "R")
+                D.text(tx - 12, by + bar_h / 2 + 6, lab, 15, "#111111" if (col == AN_C_LOW or col in PC_BAR_COLORS) else "#FFFFFF", True, "R")
             else:
                 D.text(tx + 10, by + bar_h / 2 + 6, lab, 15, "#111111")
         if k == "other":
